@@ -397,6 +397,143 @@
             table { font-size: 0.8rem; }
         }
     </style>
+
+<!-- SDKs do Firebase (Firestore) com Gestão e Edição Direta -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyC48UDggA3vBwrBDQH3uBhcPEsjGd4oUjM",
+          authDomain: "painel-de-orcamentos.firebaseapp.com",
+          projectId: "painel-de-orcamentos",
+          storageBucket: "painel-de-orcamentos.firebasestorage.app",
+          messagingSenderId: "524265200637",
+          appId: "1:524265200637:web:1bf2386dfd16c8c3a05794"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.orcamentoAtualId = null; 
+
+        window.salvarOrcamentoNaNuven = async function() {
+            try {
+                if (window.orcamentoAtualId) {
+                    const docRef = doc(db, "orcamentos", window.orcamentoAtualId);
+                    await updateDoc(docRef, {
+                        configuracoes: {
+                            estado: document.getElementById('select-estado').value,
+                            tabela: document.getElementById('select-tabela').value,
+                            bdi: document.getElementById('input-bdi').value,
+                            data_base: document.getElementById('select-data-base').value
+                        },
+                        itens: appState.orcamento,
+                        atualizadoEm: serverTimestamp()
+                    });
+                    alert("✅ Orçamento atualizado com sucesso na nuvem!");
+                } else {
+                    const nomeOrcamento = prompt("Digite um nome para identificar este orçamento na nuvem (ex: Escola Municipal - RJ):");
+                    if (!nomeOrcamento) return;
+
+                    const docRef = await addDoc(collection(db, "orcamentos"), {
+                        nome: nomeOrcamento,
+                        dataCriacao: new Date().toLocaleDateString('pt-BR'),
+                        configuracoes: {
+                            estado: document.getElementById('select-estado').value,
+                            tabela: document.getElementById('select-tabela').value,
+                            bdi: document.getElementById('input-bdi').value,
+                            data_base: document.getElementById('select-data-base').value
+                        },
+                        itens: appState.orcamento,
+                        criadoEm: serverTimestamp()
+                    });
+                    
+                    window.orcamentoAtualId = docRef.id;
+                    alert("✅ Orçamento guardado como novo na nuvem com sucesso!");
+                }
+                carregarListaNuvem();
+            } catch (e) {
+                console.error("Erro detalhado ao salvar:", e);
+                alert("❌ Erro ao salvar orçamento na nuvem. Verifique a consola (F12) para detalhes.");
+            }
+        };
+
+        window.carregarListaNuvem = async function() {
+            const container = document.getElementById('lista-orcamentos-nuvem');
+            if (!container) return;
+            
+            container.innerHTML = "A carregar orçamentos da nuvem...";
+            try {
+                const querySnapshot = await getDocs(collection(db, "orcamentos"));
+                
+                let html = `
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <select id="select-orcamento-nuvem" style="flex: 1; min-width: 250px; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: #fff;">
+                            <option value="">📂 Selecione um orçamento guardado na nuvem...</option>
+                `;
+                
+                querySnapshot.forEach((docSnap) => {
+                    const dados = docSnap.data();
+                    html += `<option value="${docSnap.id}">${dados.nome} (Criado em: ${dados.dataCriacao || 'Data não informada'})</option>`;
+                });
+                
+                html += `
+                        </select>
+                        <button class="btn btn-primary" onclick="carregarSelecionadoDaNuven()">📂 Abrir / Editar</button>
+                        <button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁️️ Salvar na Nuvem</button>
+                        <button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button>
+                    </div>
+                `;
+                container.innerHTML = querySnapshot.size > 0 ? html : `<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;"><span style="flex:1; color:var(--text-muted);">Nenhum orçamento guardado na nuvem ainda.</span><button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁️ Salvar na Nuvem</button><button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button></div>`;
+            } catch (e) {
+                console.error("Erro ao carregar lista:", e);
+                container.innerHTML = "Erro ao ligar ao banco de dados da nuvem.";
+            }
+        };
+
+        window.carregarSelecionadoDaNuven = function() {
+            const select = document.getElementById('select-orcamento-nuvem');
+            if (!select || !select.value) {
+                alert("Por favor, selecione um orçamento na lista suspensa.");
+                return;
+            }
+            window.carregarOrcamentoDaNuven(select.value);
+        };
+
+        window.carregarOrcamentoDaNuven = async function(id) {
+            if (!confirm("Deseja carregar este orçamento? Os itens atuais da tela serão substituídos.")) return;
+            try {
+                const docRef = doc(db, "orcamentos", id);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const dados = docSnap.data();
+                    window.orcamentoAtualId = id;
+                    
+                    if (dados.configuracoes) {
+                        if (dados.configuracoes.estado) document.getElementById('select-estado').value = dados.configuracoes.estado;
+                        if (dados.configuracoes.tabela) document.getElementById('select-tabela').value = dados.configuracoes.tabela;
+                        if (dados.configuracoes.bdi) document.getElementById('input-bdi').value = dados.configuracoes.bdi;
+                        if (dados.configuracoes.data_base) document.getElementById('select-data-base').value = dados.configuracoes.data_base;
+                    }
+                    if (dados.itens) {
+                        appState.orcamento = dados.itens;
+                        appState.nextId = Math.max(...dados.itens.map(i => i.id || 0), 0) + 1;
+                    }
+                    atualizarOrcamentoEBusca();
+                    alert(`✅ Orçamento "${dados.nome}" carregado com sucesso! Agora as alterações serão gravadas diretamente nele.`);
+                }
+            } catch (e) {
+                console.error("Erro ao carregar:", e);
+                alert("Erro ao descarregar o orçamento.");
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(carregarListaNuvem, 1500);
+        });
+    </script>
+
 </head>
 <body>
 
@@ -405,7 +542,7 @@
     <header class="app-header">
         <div>
             <h1><span style="font-size: 1.8rem;">📐</span> Painel de Orçamentos de Engenharia Local</h1>
-            <p>Sistema Offline para Orçamentação Civil baseado nas tabelas SINAPI (Caixa), SCO (Rio de Janeiro), Base Própria & Curva ABC</p>
+            <p>Sistema para Orçamentação Civil baseado nas tabelas SINAPI (Caixa), SCO (Rio de Janeiro), Base Própria & Curva ABC</p>
         </div>
         <div class="header-badge">Arquitetura SPA / JSON Local</div>
     </header>
@@ -420,6 +557,17 @@
             <input type="file" id="manual-json-input" multiple accept=".json" class="hidden" onchange="handleManualJsonUpload(event)">
         </div>
     </div>
+
+    <!-- SESSÃO EXTRA: ORÇAMENTOS COMPARTILHADOS NA NUVEM -->
+    <section class="section-card no-print">
+        <h2 class="section-title">
+            <span><span>☁️</span> Orçamentos Colaborativos na Nuvem</span>
+            <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Trabalhe em conjunto com os seus colegas em tempo real</span>
+        </h2>
+        <div id="lista-orcamentos-nuvem" style="padding: 10px; color: var(--text-muted);">
+            A ligar à base de dados na nuvem...
+        </div>
+    </section>
 
     <!-- SESSÃO 1: CONFIGURAÇÕES DA OBRA -->
     <section class="section-card">
@@ -469,15 +617,16 @@
                 </select>
             </div>
 
-            <label for="select-data-base"><strong>Data Base:</strong></label>
-            <select id="select-data-base" onchange="carregarBases()"> <!-- A função onchange dependerá do nome da sua função de carregamento -->
-                <option value="2026_08" selected>Agosto / 2026</option>
-                <option value="2026_07">Julho / 2026</option>
-                <!-- Pode adicionar mais meses no futuro -->
+            <div class="form-group">
+                <label for="select-data-base">Data Base:</label>
+                <select id="select-data-base" onchange="carregarBases()">
+                    <option value="2026_08" selected>Agosto / 2026</option>
+                    <option value="2026_07">Julho / 2026</option>
             </select>
+            </div>
 
             <div class="form-group">
-                <label for="input-bdi">BDI (%) :</label>
+                <label for="input-bdi">BDI (%):</label>
                 <input type="number" id="input-bdi" value="25.00" step="0.01" min="0" oninput="atualizarOrcamentoEBusca()">
             </div>
         </div>
@@ -591,7 +740,6 @@
                 <input type="text" id="input-add-descricao" placeholder="Descrição detalhada...">
             </div>
 
-            <!-- Novo Campo Grupo: Visível apenas para Item Avulso Manual -->
             <div class="form-group" id="group-grupo" style="display: none;">
                 <label for="select-add-grupo">Grupo de Insumo:</label>
                 <select id="select-add-grupo">
@@ -642,7 +790,7 @@
                         <th style="width: 110px;">Código</th>
                         <th>Descrição</th>
                         <th style="width: 65px;" class="text-center">Unid.</th>
-                        <th style="width: 80px;" class="text-right">Qtd</th>
+                        <th style="width: 110px;" class="text-right">Qtd</th>
                         <th style="width: 120px;" class="text-right">Preço Un. (R$)</th>
                         <th style="width: 130px;" class="text-right">Preço c/ BDI</th>
                         <th style="width: 140px;" class="text-right">Total (R$)</th>
@@ -673,7 +821,7 @@
 
         <!-- Toolbar com Ações Adicionais e Exportações Excel -->
         <div class="toolbar no-print">
-            <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+            <button class="btn btn-primary" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
             <button class="btn btn-success" style="background-color: #107c41;" onclick="exportarPlanilhaCompletaExcel()">📑 Exportar Caderno Completo (Excel Multi-Abas)</button>
             <button class="btn btn-secondary" onclick="exportarOrcamentoCSV()">📊 Exportar Orçamento (CSV / Excel)</button>
             <button class="btn btn-secondary" onclick="exportarOrcamentoJSON()">📥 Exportar Orçamento (JSON)</button>
@@ -813,7 +961,7 @@
         <!-- Rodapé de Ação da Fábrica -->
         <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 15px; flex-wrap: wrap; gap: 10px;">
             <div>
-                <span style="font-size: 1.1rem; font-weight: 600; color: #1e293b;">Custo Unitário Calculado: </span>
+                <span style="font-size: 1.1rem; font-weight: 600; color: #1e293b;">Custo Unitário Calculado:</span>
                 <span id="fabrica-custo-total" style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">R$ 0,00</span>
             </div>
             <div style="display: flex; gap: 10px;">
@@ -976,29 +1124,25 @@
        ========================================================================== */
     const appState = {
         databases: {
-            sinapi_csd: [],       // SINAPI Composições Não Desoneradas
-            sinapi_ccd: [],       // SINAPI Composições Desoneradas
-            sinapi_isd: [],       // SINAPI Insumos Não Desonerados
-            sinapi_icd: [],       // SINAPI Insumos Desonerados
-            sinapi_analitico: [], // Receitas Analíticas da SINAPI
-            sco_csd: [],          // SCO Composições Oneradas / Não Desoneradas
-            sco_ccd: [],          // SCO Composições Desoneradas
-            sco_isd: [],          // SCO Insumos Onerados / Não Desonerados
-            sco_icd: [],          // SCO Insumos Desonerados
-            sco_analitico: [],    // Receitas Analíticas da SCO (Prefeitura do Rio)
-            base_propria: []      // Base Própria
+            sinapi_csd: [],
+            sinapi_ccd: [],
+            sinapi_isd: [],
+            sinapi_icd: [],
+            sinapi_analitico: [],
+            sco_csd: [],
+            sco_ccd: [],
+            sco_isd: [],
+            sco_icd: [],
+            sco_analitico: [],
+            base_propria: []
         },
         searchResult: [],
-        fabricaRecipe: [], // Lista de ingredientes em edição na Fábrica de Composições
-        cachedMaoDeObra: [], // Cache do levantamento gerado de Mão de Obra
-        cachedMateriaisABC: [], // Cache do levantamento gerado de Materiais ABC
-        cachedServicosABC: [], // Cache da Curva ABC de Serviços gerada
-        orcamento: [
-            { id: 1, tipo: 'etapa', itemEap: '1.0', codigo: '-', descricao: '1. SERVIÇOS PRELIMINARES E INFRAESTRUTURA', unidade: '-', qtd: 0, precoUnitario: 0, grupo: 'OUTROS' },
-            { id: 2, tipo: 'composicao', itemEap: '1.1', codigo: '92145', descricao: 'CONCRETO FCK = 25MPA, USINADO, BOMBEADO, LANÇAMENTO E ADENSAMENTO', unidade: 'M3', qtd: 15.5, precoUnitario: 480.00, grupo: 'COMPOSICAO' },
-            { id: 3, tipo: 'sco_composicao', itemEap: '1.2', codigo: 'SCO-COMP-01', descricao: 'DEMOLIÇÃO MANUAL DE ALVENARIA DE TIJOLOS SEM REUTILIZAÇÃO', unidade: 'M3', qtd: 10.0, precoUnitario: 85.50, grupo: 'COMPOSICAO' }
-        ],
-        nextId: 4
+        fabricaRecipe: [],
+        cachedMaoDeObra: [],
+        cachedMateriaisABC: [],
+        cachedServicosABC: [],
+        orcamento: [],
+        nextId: 1
     };
 
     /* ==========================================================================
@@ -1008,12 +1152,9 @@
         const dataBase = document.getElementById('select-data-base').value; 
         const estado = document.getElementById('select-estado').value; 
     
-        // URL Base para a raiz do mês (onde estão os analíticos)
         const githubUrlRaiz = `https://raw.githubusercontent.com/thiagouffcivil-rgb/orcamento/main/${dataBase}/`;
-        // URL Base para a subpasta dos estados
         const githubUrlEstados = `${githubUrlRaiz}Por_Estado/`;
     
-        // 1. Caminhos de Preços (Como fizemos antes)
         const urlScoCSD = `${githubUrlEstados}sco_csd_${dataBase}.json`;
         const urlScoCCD = `${githubUrlEstados}sco_ccd_${dataBase}.json`;
         const urlScoISD = `${githubUrlEstados}sco_isd_${dataBase}.json`;
@@ -1024,13 +1165,9 @@
         const urlSinapiISD = `${githubUrlEstados}sinapi_isd_${dataBase}_${estado}.json`;
         const urlSinapiICD = `${githubUrlEstados}sinapi_icd_${dataBase}_${estado}.json`;
 
-        // 2. NOVOS CAMINHOS: Bases Analíticas (As "Receitas")
         const urlScoAnalitico = `${githubUrlRaiz}sco_analitico_${dataBase}.json`;
         const urlSinapiAnalitico = `${githubUrlRaiz}sinapi_analitico_${dataBase}.json`;
 
-        console.log("A baixar dados oficiais e receitas analíticas da nuvem...");
-
-        // 3. Dispara o download de TODOS os 10 arquivos simultaneamente
         Promise.all([
             fetch(urlScoCSD).then(res => res.json()),
             fetch(urlScoCCD).then(res => res.json()),
@@ -1040,15 +1177,13 @@
             fetch(urlSinapiCCD).then(res => res.json()),
             fetch(urlSinapiISD).then(res => res.json()),
             fetch(urlSinapiICD).then(res => res.json()),
-            fetch(urlScoAnalitico).then(res => res.json()),    // <-- Novo
-            fetch(urlSinapiAnalitico).then(res => res.json())  // <-- Novo
+            fetch(urlScoAnalitico).then(res => res.json()),
+            fetch(urlSinapiAnalitico).then(res => res.json())
         ]).then(([
             scoOnerada, scoDesonerada, scoInsOnerado, scoInsDesonerado, 
             sinapiOnerada, sinapiDesonerada, sinapiInsOnerado, sinapiInsDesonerado,
             scoAnalitico, sinapiAnalitico
         ]) => {
-            
-            // Salvando os preços no caminho CORRETO que a busca lê
             appState.databases.sco_csd = scoOnerada;
             appState.databases.sco_ccd = scoDesonerada;
             appState.databases.sco_isd = scoInsOnerado;
@@ -1059,13 +1194,10 @@
             appState.databases.sinapi_isd = sinapiInsOnerado;
             appState.databases.sinapi_icd = sinapiInsDesonerado;
             
-            // Salvando os Analíticos
             appState.databases.sco_analitico = scoAnalitico;
             appState.databases.sinapi_analitico = sinapiAnalitico;
             
-            console.log(`✅ Todas as bases de ${dataBase} (${estado}) foram carregadas com sucesso!`);
             alert("Bases de dados atualizadas e prontas para uso!");
-            
         }).catch(erro => {
             console.error("Erro ao carregar as bases do GitHub:", erro);
             alert(`Não foi possível carregar as bases de ${dataBase}. Verifique se todos os arquivos existem no repositório.`);
@@ -1129,7 +1261,7 @@
             inputDescricao.placeholder = "Ex: 1. SERVIÇOS PRELIMINARES E INFRAESTRUTURA";
         } else if (tipo === 'item_avulso') {
             groupCodigo.style.display = 'none';
-            groupGrupo.style.display = 'flex'; // Exibição explícita do grupo para item avulso
+            groupGrupo.style.display = 'flex';
             groupUnidade.style.display = 'flex';
             groupPreco.style.display = 'flex';
             groupQtd.style.display = 'flex';
@@ -1151,7 +1283,7 @@
     }
 
     /* ==========================================================================
-       SESSÃO 2: PESQUISA E BUSCA DE PREÇOS (COM TRAVA REGIONAL PARA SCO EM RJ)
+       SESSÃO 2: PESQUISA E BUSCA DE PREÇOS
        ========================================================================== */
     function executarBusca() {
         const estadoConfig = document.getElementById('select-estado').value;
@@ -1271,7 +1403,7 @@
     }
 
     /* ==========================================================================
-       SESSÃO 3 & 4: ADICIONAR, ORDENAR E CALCULAR ORÇAMENTO
+       SESSÃO 3 & 4: ADICIONAR, EDITAR QUANTIDADE E CALCULAR ORÇAMENTO
        ========================================================================== */
     function adicionarItemAoOrcamento() {
         const tipo = document.querySelector('input[name="tipo_lancamento"]:checked').value;
@@ -1282,7 +1414,6 @@
         const precoUnitario = parseFloat(document.getElementById('input-add-preco').value) || 0;
         const qtd = parseFloat(document.getElementById('input-add-qtd').value) || 0;
 
-        // Captura explícita do grupo para item avulso
         const grupoSelecionado = (tipo === 'item_avulso')
             ? document.getElementById('select-add-grupo').value
             : (tipo === 'etapa' ? 'OUTROS' : 'COMPOSICAO');
@@ -1307,12 +1438,19 @@
         appState.orcamento.push(novoItem);
         renderizarOrcamento();
 
-        // Limpar formulário de entrada
         document.getElementById('input-add-codigo').value = '';
         document.getElementById('input-add-descricao').value = '';
         document.getElementById('input-add-unidade').value = '';
         document.getElementById('input-add-preco').value = '';
         document.getElementById('input-add-qtd').value = '1.00';
+    }
+
+    function atualizarQuantidadeItem(id, novaQtd) {
+        const item = appState.orcamento.find(i => i.id === id);
+        if (item) {
+            item.qtd = parseFloat(novaQtd) || 0;
+            renderizarOrcamento();
+        }
     }
 
     function removerItemOrcamento(id) {
@@ -1413,7 +1551,9 @@
                     <td>${item.codigo}</td>
                     <td>${item.descricao}</td>
                     <td class="text-center">${item.unidade}</td>
-                    <td class="text-right">${item.qtd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>
+                    <td class="text-right">
+                        <input type="number" step="0.001" min="0" value="${item.qtd}" style="width: 95px; text-align: right; padding: 4px 6px;" onchange="atualizarQuantidadeItem(${item.id}, this.value)">
+                    </td>
                     <td class="text-right">${formatBRL(precoUnitarioAtual)}</td>
                     <td class="text-right">${formatBRL(precoComBdi)}</td>
                     <td class="text-right"><strong>${formatBRL(totalLinha)}</strong></td>
@@ -1456,13 +1596,11 @@
         const estadoConfig = document.getElementById('select-estado').value;
         const tabela = document.getElementById('select-tabela').value;
 
-        // 1. Tentar buscar na Base Própria
         const compPropria = appState.databases.base_propria.find(i => String(i['Código']) === codigoMae);
         if (compPropria) {
             if (Array.isArray(compPropria.ingredientes) && compPropria.ingredientes.length > 0) {
                 appState.fabricaRecipe = JSON.parse(JSON.stringify(compPropria.ingredientes));
                 
-                // Atualiza os preços para o estado/tabela atual
                 appState.fabricaRecipe.forEach(ing => {
                     ing.precoUnitario = obterPrecoItemPorCodigoETipo(ing.codigoItem, ing.tipoItem, estadoConfig, tabela);
                 });
@@ -1477,7 +1615,6 @@
             }
         }
 
-        // 2. Se não for própria, busca no Analítico SINAPI / SCO
         const analiticoSINAPI = appState.databases.sinapi_analitico || [];
         const analiticoSCO = appState.databases.sco_analitico || [];
         const analiticoCompleto = analiticoSINAPI.concat(analiticoSCO);
@@ -1539,7 +1676,6 @@
 
         let dbItem = baseData.find(i => String(i['Código']) === String(codigo));
         
-        // Fallback robusto se a tipologia enviada estiver ambígua (ex: buscar insumo SCO na base geral)
         if (!dbItem && estadoEfetivo === 'RJ') {
             dbItem = ((tabela === 'desonerada') ? appState.databases.sco_icd : appState.databases.sco_isd).find(i => String(i['Código']) === String(codigo));
         }
@@ -1575,7 +1711,7 @@
         else if (tipo === 'insumo') baseData = (tabela === 'desonerada') ? appState.databases.sinapi_icd : appState.databases.sinapi_isd;
         else if (tipo === 'sco_composicao') baseData = (tabela === 'desonerada') ? appState.databases.sco_ccd : appState.databases.sco_csd;
         else if (tipo === 'sco_insumo') baseData = (tabela === 'desonerada') ? appState.databases.sco_icd : appState.databases.sco_isd;
-        else if (tipo === 'base_propria') baseData = appState.databases.base_propria; // Adicionado suporte para base própria
+        else if (tipo === 'base_propria') baseData = appState.databases.base_propria;
 
         const dbItem = baseData.find(i => String(i['Código']) === codigo);
         const descricao = dbItem ? dbItem['Descrição'] : `Item Ingrediente (${codigo})`;
@@ -1676,7 +1812,6 @@
         }
 
         const states = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
-        
         const grupoManual = document.getElementById('select-fabrica-grupo-manual') ? document.getElementById('select-fabrica-grupo-manual').value : 'COMPOSICAO';
 
         const novaComposicao = {
@@ -1724,7 +1859,7 @@
     }
 
     /* ==========================================================================
-       SESSÃO 6: EXPLOSÃO ANALÍTICA E CURVA ABC (CLASSIFICAÇÃO EXCLUSIVAMENTE ESTRUTURADA)
+       SESSÃO 6 & 7: CURVAS ABC
        ========================================================================== */
     function gerarLevantamentoCurvaABC() {
         if (!appState.orcamento || appState.orcamento.length === 0) {
@@ -1734,7 +1869,6 @@
 
         const estadoConfig = document.getElementById('select-estado').value;
         const tabela = document.getElementById('select-tabela').value;
-
         const insumosMap = new Map();
 
         function adicionarAoMap(codigo, descricao, unidade, tipoItem, qtd, precoUnitarioManual, origem, grupoExplicito) {
@@ -1767,8 +1901,6 @@
                 if (compPropria && Array.isArray(compPropria.ingredientes) && compPropria.ingredientes.length > 0) {
                     compPropria.ingredientes.forEach(ing => {
                         const qtdTotalFilho = qtdComp * (parseFloat(ing.coeficiente) || 1.0);
-                        
-                        // Chamada recursiva caso a própria composição tenha composições como ingredientes
                         const isSubComp = String(ing.tipoItem).includes('composicao') || String(ing.tipoItem) === 'sco_composicao' || String(ing.tipoItem) === 'base_propria';
                         if (isSubComp && nivel < 2) {
                             explodirComposicao(ing.codigoItem, qtdTotalFilho, ing.tipoItem, nivel + 1);
@@ -1933,7 +2065,6 @@
         containerMaoDeObra.classList.remove('hidden');
         containerMateriais.classList.remove('hidden');
 
-        // 1. Renderização da Tabela de Mão de Obra
         const tbodyMaoDeObra = document.getElementById('tbody-mao-de-obra');
         let totalCustoHH = 0;
 
@@ -1957,11 +2088,8 @@
 
         document.getElementById('tfoot-hh-total-custo').innerText = formatBRL(totalCustoHH);
 
-        // 2. Renderização da Tabela Curva ABC de Materiais e Equipamentos
         const tbodyMateriais = document.getElementById('tbody-materiais-abc');
-        
         const somaTotalMateriais = listaMateriais.reduce((acc, item) => acc + (parseFloat(item.custoTotal) || 0), 0);
-
         let custoAcumulado = 0;
 
         if (listaMateriais.length === 0) {
@@ -2003,13 +2131,9 @@
         }
 
         document.getElementById('tfoot-materiais-total-custo').innerText = formatBRL(somaTotalMateriais);
-
         containerMaoDeObra.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    /* ==========================================================================
-       SESSÃO 7: CURVA ABC DO ORÇAMENTO (SERVIÇOS)
-       ========================================================================== */
     function gerarCurvaABCOrcamento() {
         if (!appState.orcamento || appState.orcamento.length === 0) {
             alert('O orçamento está vazio. Adicione itens primeiro.');
@@ -2081,7 +2205,6 @@
         }
 
         document.getElementById('tfoot-abc-orcamento-total').innerText = formatBRL(somaTotal);
-        
         appState.cachedServicosABC = listaCalculada;
 
         const container = document.getElementById('container-abc-orcamento');
@@ -2090,7 +2213,7 @@
     }
 
     /* ==========================================================================
-       EXPORTAÇÕES EXCEL E CSV (VANILLA JS & SPREADSHEETML NATIVO)
+       EXPORTAÇÕES EXCEL E CSV
        ========================================================================== */
     function downloadArquivo(conteudo, nomeArquivo, mimeType) {
         const blob = new Blob([conteudo], { type: mimeType });
@@ -2106,7 +2229,6 @@
 
     function exportarTabelaCSV(nomeArquivo, cabecalhos, linhas) {
         let csvContent = '\uFEFF' + cabecalhos.join(';') + '\n';
-
         linhas.forEach(linha => {
             const linhaFormatada = linha.map(campo => {
                 if (campo === null || campo === undefined) return '""';
@@ -2115,7 +2237,6 @@
             });
             csvContent += linhaFormatada.join(';') + '\n';
         });
-
         downloadArquivo(csvContent, `${nomeArquivo}_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
     }
 
@@ -2155,9 +2276,7 @@
     }
 
     function exportarMaoDeObraCSV() {
-        if (!appState.cachedMaoDeObra || appState.cachedMaoDeObra.length === 0) {
-            gerarLevantamentoCurvaABC();
-        }
+        if (!appState.cachedMaoDeObra || appState.cachedMaoDeObra.length === 0) gerarLevantamentoCurvaABC();
         if (!appState.cachedMaoDeObra || appState.cachedMaoDeObra.length === 0) {
             alert('Nenhum dado de mão de obra disponível.');
             return;
@@ -2177,9 +2296,7 @@
     }
 
     function exportarCurvaABCMateriaisCSV() {
-        if (!appState.cachedMateriaisABC || appState.cachedMateriaisABC.length === 0) {
-            gerarLevantamentoCurvaABC();
-        }
+        if (!appState.cachedMateriaisABC || appState.cachedMateriaisABC.length === 0) gerarLevantamentoCurvaABC();
         if (!appState.cachedMateriaisABC || appState.cachedMateriaisABC.length === 0) {
             alert('Nenhum dado de materiais disponível na Curva ABC.');
             return;
@@ -2202,9 +2319,7 @@
     }
 
     function exportarCurvaABCServicosCSV() {
-        if (!appState.cachedServicosABC || appState.cachedServicosABC.length === 0) {
-            gerarCurvaABCOrcamento();
-        }
+        if (!appState.cachedServicosABC || appState.cachedServicosABC.length === 0) gerarCurvaABCOrcamento();
         if (!appState.cachedServicosABC || appState.cachedServicosABC.length === 0) {
             alert('Nenhum dado disponível na Curva ABC de Serviços.');
             return;
@@ -2250,7 +2365,6 @@
             return `<Cell${styleAttr}><Data ss:Type="${type}">${escapeXml(data)}</Data></Cell>`;
         }
 
-        // 1. Aba Orçamento Analítico
         let orcamentoRows = `
             <Row ss:StyleID="HeaderStyle">
                 ${createCell('Item EAP')}
@@ -2274,11 +2388,7 @@
                         ${createCell('ETAPA')}
                         ${createCell('-')}
                         ${createCell(item.descricao)}
-                        ${createCell('')}
-                        ${createCell('')}
-                        ${createCell('')}
-                        ${createCell('')}
-                        ${createCell('')}
+                        ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
                     </Row>
                 `;
             } else {
@@ -2325,7 +2435,6 @@
             </Row>
         `;
 
-        // 2. Aba Mão de Obra (HH)
         let moRows = `
             <Row ss:StyleID="HeaderStyle">
                 ${createCell('Código')}
@@ -2364,7 +2473,6 @@
             </Row>
         `;
 
-        // 3. Aba Curva ABC Materiais
         let matRows = `
             <Row ss:StyleID="HeaderStyle">
                 ${createCell('Classe')}
@@ -2406,7 +2514,6 @@
             </Row>
         `;
 
-        // 4. Aba Curva ABC Serviços
         let servRows = `
             <Row ss:StyleID="HeaderStyle">
                 ${createCell('Classe')}
@@ -2457,94 +2564,41 @@
  xmlns:x="urn:schemas-microsoft-com:office:excel"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
- <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
-  <Title>Caderno de Orçamento e Planejamento</Title>
-  <Author>Painel de Orçamentos de Engenharia</Author>
- </DocumentProperties>
  <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Center"/>
-   <Font ss:FontName="Calibri" ss:Size="10" ss:Color="#000000"/>
-  </Style>
-  <Style ss:ID="HeaderStyle">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>
-   <Interior ss:Color="#1E3C72" ss:Pattern="Solid"/>
-  </Style>
-  <Style ss:ID="EtapaStyle">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#0F172A" ss:Bold="1"/>
-   <Interior ss:Color="#CBD5E1" ss:Pattern="Solid"/>
-  </Style>
-  <Style ss:ID="CenterStyle">
-   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-  </Style>
-  <Style ss:ID="Number2Dec">
-   <NumberFormat ss:Format="#,##0.00"/>
-  </Style>
-  <Style ss:ID="Number2DecBold">
-   <Font ss:FontName="Calibri" ss:Bold="1"/>
-   <NumberFormat ss:Format="#,##0.00"/>
-  </Style>
-  <Style ss:ID="Number3Dec">
-   <NumberFormat ss:Format="#,##0.000"/>
-  </Style>
-  <Style ss:ID="CurrencyStyle">
-   <NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/>
-  </Style>
-  <Style ss:ID="CurrencyBoldStyle">
-   <Font ss:FontName="Calibri" ss:Bold="1"/>
-   <NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/>
-  </Style>
-  <Style ss:ID="PercentStyle">
-   <NumberFormat ss:Format="0.00%"/>
-  </Style>
-  <Style ss:ID="TotalFooterStyle">
-   <Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#334155"/>
-   <Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/>
-  </Style>
-  <Style ss:ID="GrandTotalStyle">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1E293B"/>
-   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
-  </Style>
-  <Style ss:ID="CurrencyGrandTotalStyle">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#0D6EFD"/>
-   <Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/>
-   <NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/>
-  </Style>
+  <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/></Style>
+  <Style ss:ID="HeaderStyle"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/><Interior ss:Color="#1E3C72" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="EtapaStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#0F172A" ss:Bold="1"/><Interior ss:Color="#CBD5E1" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="CenterStyle"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>
+  <Style ss:ID="Number2Dec"><NumberFormat ss:Format="#,##0.00"/></Style>
+  <Style ss:ID="Number2DecBold"><Font ss:FontName="Calibri" ss:Bold="1"/><NumberFormat ss:Format="#,##0.00"/></Style>
+  <Style ss:ID="Number3Dec"><NumberFormat ss:Format="#,##0.000"/></Style>
+  <Style ss:ID="CurrencyStyle"><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
+  <Style ss:ID="CurrencyBoldStyle"><Font ss:FontName="Calibri" ss:Bold="1"/><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
+  <Style ss:ID="PercentStyle"><NumberFormat ss:Format="0.00%"/></Style>
+  <Style ss:ID="TotalFooterStyle"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#334155"/><Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="GrandTotalStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1E293B"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="CurrencyGrandTotalStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#0D6EFD"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
  </Styles>
- <Worksheet ss:Name="Orçamento Analítico">
-  <Table>${orcamentoRows}</Table>
- </Worksheet>
- <Worksheet ss:Name="Mão de Obra (HH)">
-  <Table>${moRows}</Table>
- </Worksheet>
- <Worksheet ss:Name="Curva ABC Materiais">
-  <Table>${matRows}</Table>
- </Worksheet>
- <Worksheet ss:Name="Curva ABC Serviços">
-  <Table>${servRows}</Table>
- </Worksheet>
+ <Worksheet ss:Name="Orçamento Analítico"><Table>${orcamentoRows}</Table></Worksheet>
+ <Worksheet ss:Name="Mão de Obra (HH)"><Table>${moRows}</Table></Worksheet>
+ <Worksheet ss:Name="Curva ABC Materiais"><Table>${matRows}</Table></Worksheet>
+ <Worksheet ss:Name="Curva ABC Serviços"><Table>${servRows}</Table></Worksheet>
 </Workbook>`;
 
         downloadArquivo(workbookXml, `Caderno_Orcamento_Planejamento_${new Date().toISOString().slice(0,10)}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
     }
 
-    /* ==========================================================================
-       IMPORTAÇÃO E EXPORTAÇÃO JSON DO ORÇAMENTO DA OBRA
-       ========================================================================== */
     function exportarOrcamentoJSON() {
         const data = {
             configuracoes: {
                 estado: document.getElementById('select-estado').value,
                 tabela: document.getElementById('select-tabela').value,
                 bdi: document.getElementById('input-bdi').value,
-                data_base: document.getElementById('select-data-base').value // GUARDA A DATA BASE
+                data_base: document.getElementById('select-data-base').value
             },
             itens: appState.orcamento
         };
-
-        const jsonStr = JSON.stringify(data, null, 2);
-        downloadArquivo(jsonStr, `orcamento_obra_${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+        downloadArquivo(JSON.stringify(data, null, 2), `orcamento_obra_${new Date().toISOString().slice(0,10)}.json`, 'application/json');
     }
 
     function importarOrcamentoJSON(event) {
@@ -2559,11 +2613,8 @@
                     if (imported.configuracoes.estado) document.getElementById('select-estado').value = imported.configuracoes.estado;
                     if (imported.configuracoes.tabela) document.getElementById('select-tabela').value = imported.configuracoes.tabela;
                     if (imported.configuracoes.bdi) document.getElementById('input-bdi').value = imported.configuracoes.bdi;
-                
-                    // RECUPERA A DATA BASE SE EXISTIR NO FICHEIRO
                     if (imported.configuracoes.data_base) {
                         const selectDataBase = document.getElementById('select-data-base');
-                        // Verifica se a opção existe no select antes de a definir
                         if (Array.from(selectDataBase.options).some(opt => opt.value === imported.configuracoes.data_base)) {
                             selectDataBase.value = imported.configuracoes.data_base;
                         }
@@ -2573,10 +2624,6 @@
                     appState.orcamento = imported.itens;
                     appState.nextId = Math.max(...imported.itens.map(i => i.id || 0), 0) + 1;
                 }
-                
-                // Aqui deve chamar a função que recarrega as bases JSON (SINAPI/SCO) com o novo mês selecionado
-                // Exemplo: carregarBases(); 
-                
                 atualizarOrcamentoEBusca();
                 alert('Orçamento importado com sucesso!');
             } catch (err) {
@@ -2596,39 +2643,28 @@
         }
     }
 
-    /* ==========================================================================
-       INICIALIZAÇÃO AUTOMÁTICA
-       ========================================================================== */
     window.addEventListener('DOMContentLoaded', () => {
         atualizarCamposDinamicosFormulario('etapa');
         carregarBases();
     });
 
-
-function incrementarEAP() {
-    const input = document.getElementById('input-item-eap');
-    const valor = input.value.trim();
-
-    if (!valor) {
-        input.value = '1.1';
-        return;
+    function incrementarEAP() {
+        const input = document.getElementById('input-item-eap');
+        const valor = input.value.trim();
+        if (!valor) {
+            input.value = '1.1';
+            return;
+        }
+        const partes = valor.split('.');
+        const ultimoIndice = partes.length - 1;
+        const ultimoNumero = parseInt(partes[ultimoIndice], 10);
+        if (!isNaN(ultimoNumero)) {
+            partes[ultimoIndice] = ultimoNumero + 1;
+            input.value = partes.join('.');
+        } else {
+            input.value = valor + '.1';
+        }
     }
-
-    // Divide a EAP pelos pontos (ex: "1.1.4" -> ["1", "1", "4"])
-    const partes = valor.split('.');
-    const ultimoIndice = partes.length - 1;
-    const ultimoNumero = parseInt(partes[ultimoIndice], 10);
-
-    if (!isNaN(ultimoNumero)) {
-        // Incrementa o último segmento mantendo a regra de EAP (ex: 1.9 -> 1.10)
-        partes[ultimoIndice] = ultimoNumero + 1;
-        input.value = partes.join('.');
-    } else {
-        // Fallback caso o último segmento não seja numérico
-        input.value = valor + '.1';
-    }
-}
-
 </script>
 
 </body>
