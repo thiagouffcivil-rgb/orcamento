@@ -397,221 +397,190 @@
     </style>
 
 <!-- SDKs do Firebase (Firestore + Auth Google com Restrição de Acesso) -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        // 1. Adicionado o getRedirectResult na importação
-        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-        const firebaseConfig = {
-          apiKey: "AIzaSyC48UDggA3vBwrBDQH3uBhcPEsjGd4oUjM",
-          authDomain: "painel-de-orcamentos.firebaseapp.com",
-          projectId: "painel-de-orcamentos",
-          storageBucket: "painel-de-orcamentos.firebasestorage.app",
-          messagingSenderId: "524265200637",
-          appId: "1:524265200637:web:1bf2386dfd16c8c3a05794"
-        };
+    const firebaseConfig = {
+      apiKey: "AIzaSyC48UDggA3vBwrBDQH3uBhcPEsjGd4oUjM",
+      authDomain: "painel-de-orcamentos.firebaseapp.com",
+      projectId: "painel-de-orcamentos",
+      storageBucket: "painel-de-orcamentos.firebasestorage.app",
+      messagingSenderId: "524265200637",
+      appId: "1:524265200637:web:1bf2386dfd16c8c3a05794"
+    };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const auth = getAuth(app);
-        const provider = new GoogleAuthProvider();
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-        window.orcamentoAtualId = null; 
-        window.currentUser = null;
+    window.orcamentoAtualId = null; 
+    window.currentUser = null;
 
-        // ========================================================
-        // 🔒 LISTA DE EMAILS ESPECÍFICOS AUTORIZADOS
-        // ========================================================
-        const emailsPermitidos = [
-            "seu.email.pessoal@gmail.com", // Substitua pelo seu
-            "colega@uff.br"
-        ];
-        // ========================================================
+    // Monitorizar estado de autenticação
+    onAuthStateChanged(auth, (user) => {
+        const loginUi = document.getElementById('cloud-login-ui');
+        const appUi = document.getElementById('cloud-app-ui');
+        const userNameDisplay = document.getElementById('user-name-display');
+        
+        if (user) {
+            window.currentUser = user;
+            loginUi.style.display = 'none';
+            appUi.style.display = 'block';
+            if(userNameDisplay) userNameDisplay.innerText = user.email;
+            carregarListaNuvem(); 
+        } else {
+            window.currentUser = null;
+            loginUi.style.display = 'block';
+            appUi.style.display = 'none';
+        }
+    });
 
-        // 2. CAPTURAR O RETORNO DO GOOGLE ATIVAMENTE
-        getRedirectResult(auth).then((result) => {
-            if (result) {
-                console.log("Login de redirecionamento recebido com sucesso:", result.user.email);
-            }
-        }).catch((error) => {
-            console.error("Erro no retorno do redirecionamento:", error);
-            alert("Erro ao finalizar o login: " + error.message);
-        });
+    window.loginEquipa = async function() {
+        const email = document.getElementById('login-email').value.trim();
+        const pass = document.getElementById('login-pass').value.trim();
+        if(!email || !pass) {
+            alert("Por favor, preencha o e-mail e a senha.");
+            return;
+        }
+        try {
+            await signInWithEmailAndPassword(auth, email, pass);
+        } catch(e) {
+            console.error(e);
+            alert("Acesso negado: E-mail ou senha incorretos.");
+        }
+    };
 
-        // Monitorizar estado de autenticação
-        onAuthStateChanged(auth, async (user) => {
-            const loginUi = document.getElementById('cloud-login-ui');
-            const appUi = document.getElementById('cloud-app-ui');
-            const userNameDisplay = document.getElementById('user-name-display');
-            
-            if (user) {
-                // 3. Forçar o email para minúsculas para não falhar a verificação
-                const emailUsuario = user.email ? user.email.toLowerCase() : "";
-                
-                // VERIFICAÇÃO: O e-mail está na lista OU termina em @inca.gov.br?
-                if (emailsPermitidos.includes(emailUsuario) || emailUsuario.endsWith("@inca.gov.br")) {
-                    window.currentUser = user;
-                    loginUi.style.display = 'none';
-                    appUi.style.display = 'block';
-                    if(userNameDisplay) userNameDisplay.innerText = user.displayName || user.email;
-                    carregarListaNuvem(); 
-                } else {
-                    alert(`Acesso negado: O e-mail "${user.email}" não tem permissão para aceder à nuvem.`);
-                    await signOut(auth);
-                    window.currentUser = null;
-                    loginUi.style.display = 'block';
-                    appUi.style.display = 'none';
-                }
+    window.logoutNuvem = async function() {
+        try {
+            await signOut(auth);
+            window.orcamentoAtualId = null;
+        } catch(e) {
+            console.error(e);
+        }
+    };
+
+    window.salvarOrcamentoNaNuven = async function() {
+        if (!window.currentUser) {
+            alert("Precisa de iniciar sessão na secção 'Nuvem' antes de guardar.");
+            return;
+        }
+        try {
+            if (window.orcamentoAtualId) {
+                const docRef = doc(db, "orcamentos", window.orcamentoAtualId);
+                await updateDoc(docRef, {
+                    configuracoes: {
+                        estado: document.getElementById('select-estado').value,
+                        tabela: document.getElementById('select-tabela').value,
+                        bdi: document.getElementById('input-bdi').value,
+                        data_base: document.getElementById('select-data-base').value
+                    },
+                    itens: appState.orcamento,
+                    atualizadoEm: serverTimestamp(),
+                    atualizadoPor: window.currentUser.email
+                });
+                alert("✅ Orçamento atualizado com sucesso na nuvem!");
             } else {
-                window.currentUser = null;
-                loginUi.style.display = 'block';
-                appUi.style.display = 'none';
-            }
-        });
+                const nomeOrcamento = prompt("Digite um nome para identificar este orçamento na nuvem:");
+                if (!nomeOrcamento) return;
 
-        window.loginComGoogle = async function() {
-            try {
-                await signInWithRedirect(auth, provider);
-            } catch(e) {
-                console.error("Erro ao iniciar redirecionamento:", e);
-                alert("Erro ao contactar os servidores do Google.");
-            }
-        };
-
-        // As restantes funções (logoutNuvem, salvarOrcamentoNaNuven, etc.) continuam iguais daqui para baixo...
-
-
-        window.logoutNuvem = async function() {
-            try {
-                await signOut(auth);
-                window.orcamentoAtualId = null;
-            } catch(e) {
-                console.error(e);
-            }
-        };
-
-        window.salvarOrcamentoNaNuven = async function() {
-            if (!window.currentUser) {
-                alert("Precisa de iniciar sessão na secção 'Nuvem' antes de guardar.");
-                return;
-            }
-            try {
-                if (window.orcamentoAtualId) {
-                    const docRef = doc(db, "orcamentos", window.orcamentoAtualId);
-                    await updateDoc(docRef, {
-                        configuracoes: {
-                            estado: document.getElementById('select-estado').value,
-                            tabela: document.getElementById('select-tabela').value,
-                            bdi: document.getElementById('input-bdi').value,
-                            data_base: document.getElementById('select-data-base').value
-                        },
-                        itens: appState.orcamento,
-                        atualizadoEm: serverTimestamp(),
-                        atualizadoPor: window.currentUser.email
-                    });
-                    alert("✅ Orçamento atualizado com sucesso na nuvem!");
-                } else {
-                    const nomeOrcamento = prompt("Digite um nome para identificar este orçamento na nuvem (ex: Escola Municipal - RJ):");
-                    if (!nomeOrcamento) return;
-
-                    const docRef = await addDoc(collection(db, "orcamentos"), {
-                        nome: nomeOrcamento,
-                        dataCriacao: new Date().toLocaleDateString('pt-BR'),
-                        configuracoes: {
-                            estado: document.getElementById('select-estado').value,
-                            tabela: document.getElementById('select-tabela').value,
-                            bdi: document.getElementById('input-bdi').value,
-                            data_base: document.getElementById('select-data-base').value
-                        },
-                        itens: appState.orcamento,
-                        criadoEm: serverTimestamp(),
-                        criadoPor: window.currentUser.email
-                    });
-                    
-                    window.orcamentoAtualId = docRef.id;
-                    alert("✅ Orçamento guardado como novo na nuvem com sucesso!");
-                }
-                carregarListaNuvem();
-            } catch (e) {
-                console.error("Erro detalhado ao guardar:", e);
-                alert("❌ Erro ao guardar orçamento na nuvem. Tem as permissões corretas no Firestore?");
-            }
-        };
-
-        window.carregarListaNuvem = async function() {
-            if (!window.currentUser) return;
-            const container = document.getElementById('lista-orcamentos-nuvem');
-            if (!container) return;
-            
-            container.innerHTML = "A carregar orçamentos da nuvem...";
-            try {
-                const querySnapshot = await getDocs(collection(db, "orcamentos"));
-                
-                let html = `
-                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                        <select id="select-orcamento-nuvem" style="flex: 1; min-width: 250px; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: #fff;">
-                            <option value="">📂 Selecione um orçamento guardado na nuvem...</option>
-                `;
-                
-                querySnapshot.forEach((docSnap) => {
-                    const dados = docSnap.data();
-                    html += `<option value="${docSnap.id}">${dados.nome} (Criado em: ${dados.dataCriacao || 'Data não informada'})</option>`;
+                const docRef = await addDoc(collection(db, "orcamentos"), {
+                    nome: nomeOrcamento,
+                    dataCriacao: new Date().toLocaleDateString('pt-BR'),
+                    configuracoes: {
+                        estado: document.getElementById('select-estado').value,
+                        tabela: document.getElementById('select-tabela').value,
+                        bdi: document.getElementById('input-bdi').value,
+                        data_base: document.getElementById('select-data-base').value
+                    },
+                    itens: appState.orcamento,
+                    criadoEm: serverTimestamp(),
+                    criadoPor: window.currentUser.email
                 });
                 
-                html += `
-                        </select>
-                        <button class="btn btn-primary" onclick="carregarSelecionadoDaNuven()">📂 Abrir / Editar</button>
-                        <button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁️ Guardar na Nuvem</button>
-                        <button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button>
-                    </div>
-                `;
-                container.innerHTML = querySnapshot.size > 0 ? html : `<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;"><span style="flex:1; color:var(--text-muted);">Nenhum orçamento guardado na nuvem ainda.</span><button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁ Guardar na Nuvem</button><button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button></div>`;
-            } catch (e) {
-                console.error("Erro ao carregar lista:", e);
-                container.innerHTML = "Erro ao ligar à base de dados da nuvem. Verifique as Regras do Firestore.";
+                window.orcamentoAtualId = docRef.id;
+                alert("✅ Orçamento guardado como novo na nuvem com sucesso!");
             }
-        };
+            carregarListaNuvem();
+        } catch (e) {
+            console.error("Erro detalhado ao guardar:", e);
+            alert("❌ Erro ao guardar orçamento na nuvem.");
+        }
+    };
 
-        window.carregarSelecionadoDaNuven = function() {
-            const select = document.getElementById('select-orcamento-nuvem');
-            if (!select || !select.value) {
-                alert("Por favor, selecione um orçamento na lista pendente.");
-                return;
-            }
-            window.carregarOrcamentoDaNuven(select.value);
-        };
+    window.carregarListaNuvem = async function() {
+        if (!window.currentUser) return;
+        const container = document.getElementById('lista-orcamentos-nuvem');
+        if (!container) return;
+        
+        container.innerHTML = "A carregar orçamentos da nuvem...";
+        try {
+            const querySnapshot = await getDocs(collection(db, "orcamentos"));
+            
+            let html = `
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <select id="select-orcamento-nuvem" style="flex: 1; min-width: 250px; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: #fff;">
+                        <option value="">📂 Selecione um orçamento guardado na nuvem...</option>
+            `;
+            
+            querySnapshot.forEach((docSnap) => {
+                const dados = docSnap.data();
+                html += `<option value="${docSnap.id}">${dados.nome} (Criado em: ${dados.dataCriacao || 'Data não informada'})</option>`;
+            });
+            
+            html += `
+                    </select>
+                    <button class="btn btn-primary" onclick="carregarSelecionadoDaNuven()">📂 Abrir / Editar</button>
+                    <button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁️ Guardar na Nuvem</button>
+                    <button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button>
+                </div>
+            `;
+            container.innerHTML = querySnapshot.size > 0 ? html : `<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;"><span style="flex:1; color:var(--text-muted);">Nenhum orçamento guardado na nuvem ainda.</span><button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁ Guardar na Nuvem</button><button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button></div>`;
+        } catch (e) {
+            console.error("Erro ao carregar lista:", e);
+            container.innerHTML = "Erro ao ligar à base de dados da nuvem.";
+        }
+    };
 
-        window.carregarOrcamentoDaNuven = async function(id) {
-            if (!window.currentUser) return;
-            if (!confirm("Deseja carregar este orçamento? Os itens atuais no ecrã serão substituídos.")) return;
-            try {
-                const docRef = doc(db, "orcamentos", id);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
-                    const dados = docSnap.data();
-                    window.orcamentoAtualId = id;
-                    
-                    if (dados.configuracoes) {
-                        if (dados.configuracoes.estado) document.getElementById('select-estado').value = dados.configuracoes.estado;
-                        if (dados.configuracoes.tabela) document.getElementById('select-tabela').value = dados.configuracoes.tabela;
-                        if (dados.configuracoes.bdi) document.getElementById('input-bdi').value = dados.configuracoes.bdi;
-                        if (dados.configuracoes.data_base) document.getElementById('select-data-base').value = dados.configuracoes.data_base;
-                    }
-                    if (dados.itens) {
-                        appState.orcamento = dados.itens;
-                        appState.nextId = Math.max(...dados.itens.map(i => i.id || 0), 0) + 1;
-                    }
-                    atualizarOrcamentoEBusca();
-                    alert(`✅ Orçamento "${dados.nome}" carregado com sucesso! Agora as alterações serão gravadas diretamente nele.`);
+    window.carregarSelecionadoDaNuven = function() {
+        const select = document.getElementById('select-orcamento-nuvem');
+        if (!select || !select.value) {
+            alert("Por favor, selecione um orçamento na lista.");
+            return;
+        }
+        window.carregarOrcamentoDaNuven(select.value);
+    };
+
+    window.carregarOrcamentoDaNuven = async function(id) {
+        if (!window.currentUser) return;
+        if (!confirm("Deseja carregar este orçamento? Os itens atuais no ecrã serão substituídos.")) return;
+        try {
+            const docRef = doc(db, "orcamentos", id);
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const dados = docSnap.data();
+                window.orcamentoAtualId = id;
+                
+                if (dados.configuracoes) {
+                    if (dados.configuracoes.estado) document.getElementById('select-estado').value = dados.configuracoes.estado;
+                    if (dados.configuracoes.tabela) document.getElementById('select-tabela').value = dados.configuracoes.tabela;
+                    if (dados.configuracoes.bdi) document.getElementById('input-bdi').value = dados.configuracoes.bdi;
+                    if (dados.configuracoes.data_base) document.getElementById('select-data-base').value = dados.configuracoes.data_base;
                 }
-            } catch (e) {
-                console.error("Erro ao carregar:", e);
-                alert("Erro ao descarregar o orçamento.");
+                if (dados.itens) {
+                    appState.orcamento = dados.itens;
+                    appState.nextId = Math.max(...dados.itens.map(i => i.id || 0), 0) + 1;
+                }
+                atualizarOrcamentoEBusca();
+                alert(`✅ Orçamento "${dados.nome}" carregado com sucesso!`);
             }
-        };
-    </script>
-
+        } catch (e) {
+            console.error("Erro ao carregar:", e);
+            alert("Erro ao descarregar o orçamento.");
+        }
+    };
+</script>
 </head>
 <body>
 
@@ -637,31 +606,32 @@
     </div>
 
     <!-- SESSÃO EXTRA: ORÇAMENTOS COMPARTILHADOS NA NUVEM -->
-    <section class="section-card no-print" id="section-nuvem">
-        <h2 class="section-title">
-            <span><span>☁️</span> Orçamentos Colaborativos na Nuvem</span>
-            <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Trabalhe em conjunto com os seus colegas em tempo real</span>
-        </h2>
+<section class="section-card no-print" id="section-nuvem">
+    <h2 class="section-title">
+        <span><span>☁️</span> Orçamentos Colaborativos na Nuvem</span>
+        <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Trabalhe em conjunto com os seus colegas em tempo real</span>
+    </h2>
+    
+    <div id="cloud-login-ui" style="background: #f8fafc; padding: 20px; border-radius: 6px; border: 1px solid var(--border-color); display: none;">
+        <p style="margin-bottom: 15px; font-size: 0.95rem; color: #475569;"><strong>Acesso Restrito:</strong> Introduza as suas credenciais para aceder ao painel partilhado.</p>
         
-        <!-- Tela de Login (Visível quando sem sessão) -->
-        <div id="cloud-login-ui" style="background: #f8fafc; padding: 20px; border-radius: 6px; border: 1px solid var(--border-color); display: none; text-align: center;">
-            <p style="margin-bottom: 15px; font-size: 0.95rem; color: #475569;"><strong>Acesso Restrito:</strong> Este painel partilhado é de uso exclusivo da equipe autorizada. Faça login com a sua conta Google para aceder.</p>
-            <button class="btn btn-primary" style="background-color: #4285F4; font-size: 1.1rem; padding: 12px 24px;" onclick="loginComGoogle()">
-                <span style="background: white; border-radius: 50%; padding: 2px 6px; margin-right: 8px; color: #4285F4; font-weight: bold;">G</span> Continuar com o Google
-            </button>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="email" id="login-email" placeholder="E-mail de acesso" style="max-width: 250px;">
+            <input type="password" id="login-pass" placeholder="Senha" style="max-width: 200px;" onkeyup="if(event.key==='Enter') loginEquipa()">
+            <button class="btn btn-primary" onclick="loginEquipa()">🔑 Entrar</button>
         </div>
+    </div>
 
-        <!-- Área Autenticada (Visível com sessão iniciada) -->
-        <div id="cloud-app-ui" style="display: none;">
-            <div id="lista-orcamentos-nuvem" style="padding: 10px 0; color: var(--text-muted);">
-                A ligar à base de dados na nuvem...
-            </div>
-            <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
-                <span style="font-size: 0.9rem; color: #6c757d;">Sessão iniciada como: <strong id="user-name-display">...</strong></span>
-                <button class="btn btn-sm btn-outline" style="color: var(--danger);" onclick="logoutNuvem()">🚪 Terminar Sessão</button>
-            </div>
+    <div id="cloud-app-ui" style="display: none;">
+        <div id="lista-orcamentos-nuvem" style="padding: 10px 0; color: var(--text-muted);">
+            A ligar à base de dados na nuvem...
         </div>
-    </section>
+        <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
+            <span style="font-size: 0.9rem; color: #6c757d;">Acedido como: <strong id="user-name-display">...</strong></span>
+            <button class="btn btn-sm btn-outline" style="color: var(--danger);" onclick="logoutNuvem()">🚪 Terminar Sessão</button>
+        </div>
+    </div>
+</section>
 
     <!-- SESSÃO 1: CONFIGURAÇÕES DA OBRA -->
     <section class="section-card">
