@@ -459,17 +459,11 @@
 
         window.loginComGoogle = async function() {
             try {
-                await signInWithPopup(auth, provider);
+                // Usa o redirecionamento em vez de abrir uma janela pop-up
+                await signInWithRedirect(auth, provider);
             } catch(e) {
-                console.error("Erro detalhado do Google Auth:", e);
-                
-                // Se você fechar a janelinha sem querer, o sistema ignora e não dá erro
-                if (e.code === 'auth/popup-closed-by-user') {
-                    return; 
-                }
-                
-                // Exibe o erro exato na tela
-                alert("Falha no login.\n\nCódigo: " + e.code + "\nDetalhe: " + e.message + "\n\n💡 DICA: Se estiver usando Aba Anônima, o navegador bloqueia os cookies do Google. Tente em uma janela normal do Chrome.");
+                console.error("Erro ao iniciar redirecionamento:", e);
+                alert("Erro ao contactar os servidores do Google.");
             }
         };
 
