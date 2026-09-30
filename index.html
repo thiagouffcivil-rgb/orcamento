@@ -1327,6 +1327,8 @@
         calcularECoberturaCustoFabrica();
     }
 
+
+
     function atualizarCamposDinamicosFormulario(tipo) {
         const groupCodigo = document.getElementById('group-codigo');
         const groupDescricao = document.getElementById('group-descricao');
@@ -1372,6 +1374,86 @@
     }
 
     // FÁBRICA DE COMPOSIÇÕES - CORREÇÃO DE INGREDIENTES E ITENS INVENTADOS
+
+
+    function carregarReceitaMae() {
+        const codigoMae = document.getElementById('input-sinapi-mae').value.trim();
+        if (!codigoMae) {
+            alert('Por favor, informe o código da composição mãe (SINAPI, SCO ou Própria).');
+            return;
+        }
+
+        const estadoConfig = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+
+        const compPropria = appState.databases.base_propria.find(i => String(i['Código']) === codigoMae);
+        if (compPropria) {
+            if (Array.isArray(compPropria.ingredientes) && compPropria.ingredientes.length > 0) {
+                appState.fabricaRecipe = JSON.parse(JSON.stringify(compPropria.ingredientes));
+                
+                appState.fabricaRecipe.forEach(ing => {
+                    ing.precoUnitario = obterPrecoItemPorCodigoETipo(ing.codigoItem, ing.tipoItem, estadoConfig, tabela);
+                });
+
+                document.getElementById('input-fabrica-descricao').value = `ADAPTADO: ${compPropria['Descrição'] || ''}`;
+                document.getElementById('input-fabrica-unidade').value = compPropria['Unidade'] || 'UN';
+                renderizarTabelaReceitaFabrica();
+                return;
+            } else {
+                alert(`A composição própria ${codigoMae} foi criada no modo "Preço Fixo" e não possui uma receita detalhada para ser adaptada.`);
+                return;
+            }
+        }
+
+        const analiticoSINAPI = appState.databases.sinapi_analitico || [];
+        const analiticoSCO = appState.databases.sco_analitico || [];
+        const analiticoCompleto = analiticoSINAPI.concat(analiticoSCO);
+
+        const receitaEncontrada = analiticoCompleto.filter(item => String(item['Código'] || item['Código Mãe'] || '') === codigoMae);
+
+        if (receitaEncontrada.length === 0) {
+            alert(`Nenhuma receita encontrada no arquivo analítico ou Base Própria para o código ${codigoMae}.`);
+            return;
+        }
+
+        appState.fabricaRecipe = receitaEncontrada.map(item => {
+            const codigoItem = item['Código do Item'] || item['Código Item'] || item['Código'];
+            const tipoItem = String(item['Tipo Item'] || 'INSUMO').toLowerCase() === 'composicao' ? 'composicao' : 'insumo';
+            const descricao = item['Descrição'] || '';
+            const unidade = item['Unidade'] || '';
+            const coeficiente = parseFloat(item['Coeficiente']) || 1.0;
+            const grupo = String(item['Tipo Item'] || item['Grupo'] || 'MATERIAL').toUpperCase();
+
+            const precoUnitario = obterPrecoItemPorCodigoETipo(codigoItem, tipoItem, estadoConfig, tabela);
+
+            return {
+                codigoItem: codigoItem,
+                tipoItem: tipoItem,
+                descricao: descricao,
+                unidade: unidade,
+                coeficiente: coeficiente,
+                precoUnitario: precoUnitario,
+                grupo: grupo
+            };
+        });
+
+        const csdCompleto = (appState.databases.sinapi_csd || []).concat(appState.databases.sco_csd || []);
+        const ccdCompleto = (appState.databases.sinapi_ccd || []).concat(appState.databases.sco_ccd || []);
+        
+        let compMaeObj = ((tabela === 'desonerada') ? ccdCompleto : csdCompleto).find(i => String(i['Código']) === codigoMae);
+        
+        if (compMaeObj) {
+            if (!document.getElementById('input-fabrica-descricao').value) {
+                document.getElementById('input-fabrica-descricao').value = `ADAPTADO: ${compMaeObj['Descrição'] || ''}`;
+            }
+            if (!document.getElementById('input-fabrica-unidade').value) {
+                document.getElementById('input-fabrica-unidade').value = compMaeObj['Unidade'] || 'UN';
+            }
+        }
+
+        renderizarTabelaReceitaFabrica();
+    }
+
     function adicionarIngredienteAvulsoInventado() {
         const inputCodigo = document.getElementById('input-avulso-codigo');
         const inputDescricao = document.getElementById('input-avulso-descricao');
