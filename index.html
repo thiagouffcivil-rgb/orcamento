@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Orçamentos de Engenharia Local - SINAPI, SCO, Base Própria & Curva ABC</title>
     <style>
-        /* ==========================================================================
-           1. SISTEMA DE DESIGN & VARIÁVEIS CSS (ESTILO MODERNO MODULAR)
-           ========================================================================== */
         :root {
             --primary: #0d6efd;
             --primary-hover: #0b5ed7;
@@ -53,7 +50,6 @@
             margin: 0 auto;
         }
 
-        /* Cabeçalho Principal */
         .app-header {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             color: #ffffff;
@@ -92,7 +88,6 @@
             letter-spacing: 0.5px;
         }
 
-        /* Estilo dos Cards / Seções Verticalizadas */
         .section-card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -133,7 +128,6 @@
             margin-right: 8px;
         }
 
-        /* Form Grid e Elementos */
         .form-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -186,7 +180,6 @@
             cursor: not-allowed;
         }
 
-        /* Grupos de Radio Buttons Estilizados */
         .radio-group {
             display: flex;
             flex-wrap: wrap;
@@ -226,7 +219,6 @@
             font-weight: 600;
         }
 
-        /* Botões */
         .btn {
             display: inline-flex;
             align-items: center;
@@ -270,7 +262,6 @@
             border-color: var(--secondary);
         }
 
-        /* Tabelas Estilizadas */
         .table-responsive {
             width: 100%;
             overflow-x: auto;
@@ -319,7 +310,6 @@
         .text-right { text-align: right; }
         .text-center { text-align: center; }
 
-        /* Resumo Final do Orçamento */
         .summary-card {
             background-color: #f8fafc;
             border: 1px solid #e2e8f0;
@@ -355,7 +345,6 @@
             margin-top: 15px;
         }
 
-        /* Badges da Curva ABC */
         .badge-abc {
             padding: 4px 8px;
             border-radius: 4px;
@@ -384,10 +373,10 @@
         }
     </style>
 
-<!-- SDKs do Firebase (Firestore + Auth E-mail/Senha) -->
+<!-- SDKs do Firebase (Firestore + Auth E-mail/Senha + Sincronização Base Própria) -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -406,21 +395,24 @@
     window.orcamentoAtualId = null; 
     window.currentUser = null;
 
-    onAuthStateChanged(auth, (user) => {
+    onAuthStateChanged(auth, async (user) => {
         const loginUi = document.getElementById('cloud-login-ui');
         const appUi = document.getElementById('cloud-app-ui');
         const userNameDisplay = document.getElementById('user-name-display');
         
         if (user) {
             window.currentUser = user;
-            loginUi.style.display = 'none';
-            appUi.style.display = 'block';
+            if (loginUi) loginUi.style.display = 'none';
+            if (appUi) appUi.style.display = 'block';
             if(userNameDisplay) userNameDisplay.innerText = user.email;
+            
+            // Carregar Base Própria partilhada da nuvem automaticamente
+            await carregarBasePropriaDaNuvem();
             carregarListaNuvem(); 
         } else {
             window.currentUser = null;
-            loginUi.style.display = 'block';
-            appUi.style.display = 'none';
+            if (loginUi) loginUi.style.display = 'block';
+            if (appUi) appUi.style.display = 'none';
         }
     });
 
@@ -567,12 +559,53 @@
             alert("Erro ao descarregar o orçamento.");
         }
     };
+
+    // Funções de Sincronização da Base Própria na Nuvem
+    window.salvarBasePropriaNaNuven = async function() {
+        if (!window.currentUser) {
+            alert("Precisa de iniciar sessão na secção 'Nuvem' antes de sincronizar a base própria.");
+            return;
+        }
+        if (!appState.databases.base_propria || appState.databases.base_propria.length === 0) {
+            alert("A Base Própria está vazia. Fabrique pelo menos uma composição antes de sincronizar.");
+            return;
+        }
+
+        try {
+            const docRef = doc(db, "configuracoes_globais", "base_propria_equipa");
+            await setDoc(docRef, {
+                itens: appState.databases.base_propria,
+                atualizadoEm: serverTimestamp(),
+                atualizadoPor: window.currentUser.email
+            }, { merge: true });
+
+            alert("✅ Base Própria sincronizada com sucesso na nuvem para toda a equipa!");
+        } catch (e) {
+            console.error("Erro ao sincronizar Base Própria:", e);
+            alert("❌ Erro ao guardar a Base Própria na nuvem.");
+        }
+    };
+
+    window.carregarBasePropriaDaNuvem = async function() {
+        try {
+            const docRef = doc(db, "configuracoes_globais", "base_propria_equipa");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                const dados = docSnap.data();
+                if (dados && Array.isArray(dados.itens)) {
+                    appState.databases.base_propria = dados.itens;
+                    console.log("Base Própria carregada da nuvem com sucesso!");
+                }
+            }
+        } catch (e) {
+            console.error("Aviso: Nenhuma Base Própria encontrada na nuvem ainda.", e);
+        }
+    };
 </script>
 </head>
 <body>
 
 <div class="container">
-    <!-- Cabeçalho Principal da Aplicação -->
     <header class="app-header">
         <div>
             <h1><span style="font-size: 1.8rem;">📐</span> Painel de Orçamentos de Engenharia Local</h1>
@@ -678,7 +711,6 @@
             <span><span class="section-number">2</span> Painel de Busca de Preços (Global & Filtros)</span>
         </h2>
         
-        <!-- Filtros e Opções de Busca Global -->
         <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 15px;">
             <div style="font-weight: bold; margin-bottom: 8px; color: #334155; font-size: 0.9rem;">Bases de Dados e Tipos a Incluir na Pesquisa:</div>
             <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 12px; font-size: 0.9rem;">
@@ -710,7 +742,6 @@
             </div>
         </div>
 
-        <!-- Tabela de Resultados da Busca -->
         <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
             <table>
                 <thead>
@@ -869,8 +900,8 @@
             <button class="btn btn-secondary" onclick="exportarOrcamentoJSON()">📥 Exportar Orçamento (JSON)</button>
             <button class="btn btn-secondary" onclick="document.getElementById('import-file-input').click()">📤 Importar Orçamento (JSON)</button>
             <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="importarOrcamentoJSON(event)">
-            <button class="btn btn-success" onclick="salvarBasePropriaJSON()">💾 Salvar Base Própria</button>
-            <button class="btn btn-danger" style="margin-left: auto;" onclick="limparOrcamento()">🗑️ Limpar Orçamento</button>
+            <button class="btn btn-success" onclick="salvarBasePropriaJSON()">💾 Salvar Base Própria Local</button>
+            <button class="btn btn-danger" style="margin-left: auto;" onclick="limparOrcamento()">🗑️️ Limpar Orçamento</button>
         </div>
     </section>
 
@@ -985,7 +1016,7 @@
                     <div class="form-group">
                         <label for="select-ingrediente-grupo">Grupo:</label>
                         <select id="select-ingrediente-grupo">
-                            <option value="COMPOSICAO" selected>Composição</option>
+                            <option value="COMPOSIÇÃO" selected>Composição</option>
                             <option value="MATERIAL" selected>Material</option>
                             <option value="MÃO DE OBRA">Mão de Obra</option>
                             <option value="EQUIPAMENTO">Equipamento</option>
@@ -1042,9 +1073,10 @@
                 <span style="font-size: 1.1rem; font-weight: 600; color: #1e293b;">Custo Unitário Calculado:</span>
                 <span id="fabrica-custo-total" style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">R$ 0,00</span>
             </div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-success" onclick="fabricarESalvarComposicao()">🏭 Fabricar e Salvar Composição</button>
-                <button class="btn btn-secondary" onclick="salvarBasePropriaJSON()">💾 Salvar Base Própria</button>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-success" onclick="fabricarESalvarComposicao()">🏭 Fabricar Composição</button>
+                <button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarBasePropriaNaNuven()">☁️ Sincronizar Base Própria na Nuvem</button>
+                <button class="btn btn-secondary" onclick="salvarBasePropriaJSON()">💾 Baixar JSON Local</button>
             </div>
         </div>
     </section>
@@ -1336,9 +1368,242 @@
         }
     }
 
-    // ==========================================
-    // NOVA FUNÇÃO DE BUSCA GLOBAL E ORDENAÇÃO
-    // ==========================================
+    // FÁBRICA DE COMPOSIÇÕES - CORREÇÃO DE INGREDIENTES E ITENS INVENTADOS
+    function adicionarIngredienteAvulsoInventado() {
+        const inputCodigo = document.getElementById('input-avulso-codigo');
+        const inputDescricao = document.getElementById('input-avulso-descricao');
+        const inputUnidade = document.getElementById('input-avulso-unidade');
+        const inputPreco = document.getElementById('input-avulso-preco');
+        const selectGrupo = document.getElementById('select-avulso-grupo');
+        const inputCoef = document.getElementById('input-avulso-coef');
+
+        const codigo = inputCodigo ? inputCodigo.value.trim() || `INV-${Date.now().toString().slice(-4)}` : `INV-01`;
+        const descricao = inputDescricao ? inputDescricao.value.trim() : '';
+        const unidade = inputUnidade ? inputUnidade.value.trim() || 'UN' : 'UN';
+        const preco = inputPreco ? parseFloat(inputPreco.value) || 0 : 0;
+        const grupo = selectGrupo ? selectGrupo.value : 'MATERIAL';
+        const coeficiente = inputCoef ? parseFloat(inputCoef.value) || 1.0 : 1.0;
+
+        if (!descricao) {
+            alert('Por favor, informe a descrição do insumo inventado.');
+            if (inputDescricao) inputDescricao.focus();
+            return;
+        }
+
+        appState.fabricaRecipe.push({
+            codigoItem: codigo,
+            tipoItem: 'avulso_inventado',
+            descricao: descricao,
+            unidade: unidade,
+            coeficiente: coeficiente,
+            precoUnitario: preco,
+            grupo: grupo
+        });
+
+        if (inputCodigo) inputCodigo.value = '';
+        if (inputDescricao) inputDescricao.value = '';
+        if (inputUnidade) inputUnidade.value = '';
+        if (inputPreco) inputPreco.value = '';
+        if (inputCoef) inputCoef.value = '1.0000';
+
+        renderizarTabelaReceitaFabrica();
+    }
+
+    function renderizarTabelaReceitaFabrica() {
+        const tbody = document.getElementById('tbody-fabrica-receita');
+        if (!tbody) return;
+        if (appState.fabricaRecipe.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="padding: 15px; color: var(--text-muted);">Nenhum ingrediente na receita.</td></tr>`;
+            calcularECoberturaCustoFabrica();
+            return;
+        }
+
+        tbody.innerHTML = appState.fabricaRecipe.map((item, idx) => {
+            const totalItem = (item.coeficiente * item.precoUnitario) || 0;
+            return `
+                <tr>
+                    <td><strong>${item.codigoItem}</strong></td>
+                    <td><span class="header-badge" style="font-size:0.7rem; background:#64748b;">${(item.grupo || item.tipoItem).toUpperCase()}</span></td>
+                    <td>${item.descricao}</td>
+                    <td class="text-center">${item.unidade}</td>
+                    <td class="text-right">${item.coeficiente.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}</td>
+                    <td class="text-right">${formatBRL(item.precoUnitario)}</td>
+                    <td class="text-right"><strong>${formatBRL(totalItem)}</strong></td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-danger" onclick="removerIngredienteReceita(${idx})">❌ Remover</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        calcularECoberturaCustoFabrica();
+    }
+
+    function removerIngredienteReceita(index) {
+        appState.fabricaRecipe.splice(index, 1);
+        renderizarTabelaReceitaFabrica();
+    }
+
+    function adicionarIngredienteManualAorReceita() {
+        const codigo = document.getElementById('input-ingrediente-codigo').value.trim();
+        const tipo = document.getElementById('select-ingrediente-tipo').value;
+        const grupo = document.getElementById('select-ingrediente-grupo').value;
+        const coeficiente = parseFloat(document.getElementById('input-ingrediente-coef').value) || 1.0;
+
+        if (!codigo) {
+            alert('Por favor, informe o Código do item ingrediente.');
+            return;
+        }
+
+        const estadoConfig = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+
+        const estadoEfetivo = (tipo === 'sco_composicao' || tipo === 'sco_insumo') ? 'RJ' : estadoConfig;
+        let baseData = [];
+        if (tipo === 'composicao') baseData = (tabela === 'desonerada') ? appState.databases.sinapi_ccd : appState.databases.sinapi_csd;
+        else if (tipo === 'insumo') baseData = (tabela === 'desonerada') ? appState.databases.sinapi_icd : appState.databases.sinapi_isd;
+        else if (tipo === 'sco_composicao') baseData = (tabela === 'desonerada') ? appState.databases.sco_ccd : appState.databases.sco_csd;
+        else if (tipo === 'sco_insumo') baseData = (tabela === 'desonerada') ? appState.databases.sco_icd : appState.databases.sco_isd;
+        else if (tipo === 'base_propria') baseData = appState.databases.base_propria;
+
+        const dbItem = baseData.find(i => String(i['Código']) === codigo);
+        const descricao = dbItem ? dbItem['Descrição'] : `Item Ingrediente (${codigo})`;
+        const unidade = dbItem ? dbItem['Unidade'] : 'UN';
+        
+        let precoUnitario = 0;
+        if (dbItem) {
+            let val = dbItem[estadoEfetivo];
+            if (val === undefined || val === null) val = dbItem['RJ'];
+            precoUnitario = parseFloat(val) || 0;
+        }
+
+        appState.fabricaRecipe.push({
+            codigoItem: codigo,
+            tipoItem: tipo,
+            descricao: descricao,
+            unidade: unidade,
+            coeficiente: coeficiente,
+            precoUnitario: precoUnitario,
+            grupo: grupo
+        });
+
+        document.getElementById('input-ingrediente-codigo').value = '';
+        renderizarTabelaReceitaFabrica();
+    }
+
+    function obterPrecoItemPorCodigoETipo(codigo, tipo, estadoConfig, tabela) {
+        if (tipo === 'avulso_inventado') {
+            const itemExistente = appState.fabricaRecipe.find(i => String(i.codigoItem).trim() === String(codigo).trim());
+            return itemExistente ? itemExistente.precoUnitario : 0;
+        }
+
+        const estadoEfetivo = (tipo === 'sco_composicao' || tipo === 'sco_insumo' || String(codigo).startsWith('MAT') || String(codigo).startsWith('MOD') || String(codigo).startsWith('MOI') || String(codigo).startsWith('EQ') || String(codigo).startsWith('AD ') || String(codigo).startsWith('SCO')) ? 'RJ' : estadoConfig;
+
+        let baseData = [];
+        if (tipo === 'composicao') baseData = (tabela === 'desonerada') ? appState.databases.sinapi_ccd : appState.databases.sinapi_csd;
+        else if (tipo === 'insumo') baseData = (tabela === 'desonerada') ? appState.databases.sinapi_icd : appState.databases.sinapi_isd;
+        else if (tipo === 'sco_composicao') baseData = (tabela === 'desonerada') ? appState.databases.sco_ccd : appState.databases.sco_csd;
+        else if (tipo === 'sco_insumo') baseData = (tabela === 'desonerada') ? appState.databases.sco_icd : appState.databases.sco_isd;
+        else if (tipo === 'base_propria') baseData = appState.databases.base_propria;
+
+        let dbItem = baseData.find(i => String(i['Código']) === String(codigo));
+        
+        if (!dbItem && estadoEfetivo === 'RJ') {
+            dbItem = ((tabela === 'desonerada') ? appState.databases.sco_icd : appState.databases.sco_isd).find(i => String(i['Código']) === String(codigo));
+        }
+        if (!dbItem && estadoEfetivo !== 'RJ') {
+            dbItem = ((tabela === 'desonerada') ? appState.databases.sinapi_icd : appState.databases.sinapi_isd).find(i => String(i['Código']) === String(codigo));
+        }
+
+        if (dbItem) {
+            let valor = dbItem[estadoEfetivo];
+            if (valor === undefined || valor === null) valor = dbItem['RJ'];
+            return parseFloat(valor) || 0;
+        }
+        return 0;
+    }
+
+    function calcularECoberturaCustoFabrica() {
+        const modoEl = document.querySelector('input[name="fabrica_modo"]:checked');
+        const modo = modoEl ? modoEl.value : 'manual';
+        let custoTotal = 0;
+
+        if (modo === 'manual') {
+            const inputManual = document.getElementById('input-fabrica-preco-manual');
+            custoTotal = inputManual ? parseFloat(inputManual.value) || 0 : 0;
+        } else {
+            const estadoConfig = document.getElementById('select-estado').value;
+            const tabela = document.getElementById('select-tabela').value;
+
+            custoTotal = appState.fabricaRecipe.reduce((acc, item) => {
+                if (item.tipoItem === 'avulso_inventado') {
+                    return acc + (item.coeficiente * item.precoUnitario);
+                }
+                const precoAtual = obterPrecoItemPorCodigoETipo(item.codigoItem, item.tipoItem, estadoConfig, tabela);
+                return acc + (item.coeficiente * (precoAtual || item.precoUnitario || 0));
+            }, 0);
+        }
+
+        const custoTotalEl = document.getElementById('fabrica-custo-total');
+        if (custoTotalEl) {
+            custoTotalEl.innerText = formatBRL(custoTotal);
+        }
+        return custoTotal;
+    }
+
+    function fabricarESalvarComposicao() {
+        const codigo = document.getElementById('input-fabrica-codigo').value.trim();
+        const descricao = document.getElementById('input-fabrica-descricao').value.trim();
+        const unidade = document.getElementById('input-fabrica-unidade').value.trim();
+        const modoEl = document.querySelector('input[name="fabrica_modo"]:checked');
+        const modo = modoEl ? modoEl.value : 'manual';
+
+        if (!codigo || !descricao || !unidade) {
+            alert('Por favor, preencha o Código Próprio, a Descrição e a Unidade da nova composição.');
+            return;
+        }
+
+        const precoCalculado = calcularECoberturaCustoFabrica();
+
+        if (precoCalculado <= 0) {
+            if (!confirm('O preço calculado da composição é R$ 0,00. Deseja salvar mesmo assim?')) {
+                return;
+            }
+        }
+
+        const states = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+        const grupoManual = document.getElementById('select-fabrica-grupo-manual') ? document.getElementById('select-fabrica-grupo-manual').value : 'COMPOSICAO';
+
+        const novaComposicao = {
+            'Código': codigo,
+            'Descrição': descricao,
+            'Unidade': unidade,
+            'Grupo': (modo === 'manual' ? grupoManual : 'COMPOSICAO'),
+            'ingredientes': modo !== 'manual' ? JSON.parse(JSON.stringify(appState.fabricaRecipe)) : []
+        };
+
+        states.forEach(st => novaComposicao[st] = precoCalculado);
+
+        const idxExistente = appState.databases.base_propria.findIndex(i => String(i['Código']) === codigo);
+        if (idxExistente >= 0) {
+            appState.databases.base_propria[idxExistente] = novaComposicao;
+            alert(`Composição ${codigo} atualizada com sucesso na Base Própria!`);
+        } else {
+            appState.databases.base_propria.push(novaComposicao);
+            alert(`Composição ${codigo} fabricada e salva com sucesso na Base Própria!`);
+        }
+
+        document.getElementById('input-fabrica-codigo').value = '';
+        document.getElementById('input-fabrica-descricao').value = '';
+        document.getElementById('input-fabrica-unidade').value = '';
+        const precoMan = document.getElementById('input-fabrica-preco-manual');
+        if (precoMan) precoMan.value = '';
+        appState.fabricaRecipe = [];
+        renderizarTabelaReceitaFabrica();
+        atualizarOrcamentoEBusca();
+    }
+
+    // BUSCA GLOBAL E ORDENAÇÃO
     window.executarBuscaGlobal = function() {
         const termoBruto = document.getElementById('input-busca').value.trim().toLowerCase();
         if (!termoBruto) {
@@ -1360,9 +1625,8 @@
         const containerResultados = document.getElementById('tbody-busca-resultados');
         containerResultados.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 20px; color: var(--text-muted);">A pesquisar nas bases selecionadas...</td></tr>`;
 
-        const termosBusca = termoBruto.split(/\s+/); // Suporta múltiplas palavras-chave
+        const termosBusca = termoBruto.split(/\s+/);
 
-        // 1. SINAPI Composições
         if (incluirSinapiComp) {
             const base = (tabela === 'desonerada') ? appState.databases.sinapi_ccd : appState.databases.sinapi_csd;
             base.forEach(item => {
@@ -1382,7 +1646,6 @@
             });
         }
 
-        // 2. SINAPI Insumos
         if (incluirSinapiIns) {
             const base = (tabela === 'desonerada') ? appState.databases.sinapi_icd : appState.databases.sinapi_isd;
             base.forEach(item => {
@@ -1402,7 +1665,6 @@
             });
         }
 
-        // 3. SCO Composições
         if (incluirScoComp) {
             const base = (tabela === 'desonerada') ? appState.databases.sco_ccd : appState.databases.sco_csd;
             base.forEach(item => {
@@ -1422,7 +1684,6 @@
             });
         }
 
-        // 4. SCO Insumos
         if (incluirScoIns) {
             const base = (tabela === 'desonerada') ? appState.databases.sco_icd : appState.databases.sco_isd;
             base.forEach(item => {
@@ -1442,7 +1703,6 @@
             });
         }
 
-        // 5. Base Própria
         if (incluirBasePropria) {
             const base = appState.databases.base_propria;
             base.forEach(item => {
@@ -1462,7 +1722,6 @@
             });
         }
 
-        // Ordenação Inteligente
         resultadosBrutos.sort((a, b) => {
             if (criterioOrdenacao === 'preco-asc') {
                 return a.preco - b.preco;
@@ -1719,7 +1978,6 @@
         }
     }
 
-    // Exportações, Fábrica e Curva ABC mantêm-se totalmente operacionais...
     function exportarOrcamentoJSON() {
         const data = {
             configuracoes: {
@@ -1731,6 +1989,14 @@
             itens: appState.orcamento
         };
         downloadArquivo(JSON.stringify(data, null, 2), `orcamento_obra_${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+    }
+
+    function salvarBasePropriaJSON() {
+        if (!appState.databases.base_propria || appState.databases.base_propria.length === 0) {
+            alert('A Base Própria está vazia.');
+            return;
+        }
+        downloadArquivo(JSON.stringify(appState.databases.base_propria, null, 2), 'base_propria.json', 'application/json');
     }
 
     function downloadArquivo(conteudo, nomeArquivo, mimeType) {
