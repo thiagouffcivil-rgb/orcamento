@@ -2143,6 +2143,816 @@
             input.value = valor + '.1';
         }
     }
+
+    /* ==========================================================================
+       SESSÃO 6 & 7: CURVAS ABC
+       ========================================================================== */
+    function gerarLevantamentoCurvaABC() {
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            alert('O orçamento está vazio. Adicione itens ao orçamento primeiro.');
+            return;
+        }
+
+        const estadoConfig = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+        const insumosMap = new Map();
+
+        function adicionarAoMap(codigo, descricao, unidade, tipoItem, qtd, precoUnitarioManual, origem, grupoExplicito) {
+            if (!codigo || codigo === '-') return;
+            const key = String(codigo).trim();
+
+            if (insumosMap.has(key)) {
+                const existing = insumosMap.get(key);
+                existing.qtdTotal += qtd;
+                if (!existing.descricao && descricao) existing.descricao = descricao;
+                if ((!existing.unidade || existing.unidade === 'UN') && unidade) existing.unidade = unidade;
+                if (!existing.grupo && grupoExplicito) existing.grupo = grupoExplicito;
+            } else {
+                insumosMap.set(key, {
+                    codigo: key,
+                    descricao: descricao,
+                    unidade: unidade || 'UN',
+                    tipoItem: tipoItem || '',
+                    qtdTotal: qtd,
+                    precoUnitarioManual: precoUnitarioManual || 0,
+                    origem: origem || '',
+                    grupo: grupoExplicito || tipoItem || ''
+                });
+            }
+        }
+
+        function explodirComposicao(codigoComp, qtdComp, tipoBase, nivel = 0) {
+            if (tipoBase === 'base_propria') {
+                const compPropria = appState.databases.base_propria.find(i => String(i['Código']).trim() === String(codigoComp).trim());
+                if (compPropria && Array.isArray(compPropria.ingredientes) && compPropria.ingredientes.length > 0) {
+                    compPropria.ingredientes.forEach(ing => {
+                        const qtdTotalFilho = qtdComp * (parseFloat(ing.coeficiente) || 1.0);
+                        const isSubComp = String(ing.tipoItem).includes('composicao') || String(ing.tipoItem) === 'sco_composicao' || String(ing.tipoItem) === 'base_propria';
+                        if (isSubComp && nivel < 2) {
+                            explodirComposicao(ing.codigoItem, qtdTotalFilho, ing.tipoItem, nivel + 1);
+                        } else {
+                            adicionarAoMap(ing.codigoItem, ing.descricao, ing.unidade, ing.tipoItem, qtdTotalFilho, ing.precoUnitario, 'base_propria', ing.grupo);
+                        }
+                    });
+                    return;
+                }
+                adicionarAoMap(codigoComp, compPropria ? compPropria['Descrição'] : `Composição ${codigoComp}`, compPropria ? compPropria['Unidade'] : 'UN', 'COMPOSICAO', qtdComp, 0, 'base_propria', compPropria ? compPropria.Grupo : 'COMPOSICAO');
+                return;
+            }
+
+            const isSCO = tipoBase === 'sco_composicao' || String(codigoComp).startsWith('SCO-') || String(codigoComp).startsWith('AD ');
+            const analiticoBase = isSCO ? appState.databases.sco_analitico : appState.databases.sinapi_analitico;
+
+            const filhos = (analiticoBase || []).filter(item => {
+                const codMae = String(item['Código Mãe'] || item['Código'] || '').trim();
+                return codMae === String(codigoComp).trim();
+            });
+
+            if (filhos.length === 0) {
+                adicionarAoMap(codigoComp, `Composição ${codigoComp}`, 'UN', 'COMPOSICAO', qtdComp, 0, tipoBase);
+                return;
+            }
+
+            filhos.forEach(filho => {
+                const codFilho = String(filho['Código do Item'] || filho['Código Item'] || filho['Código'] || '').trim();
+                const descFilho = filho['Descrição'] || '';
+                const unidFilho = filho['Unidade'] || '';
+                const coefFilho = parseFloat(filho['Coeficiente']) || 1.0;
+                const tipoItem = String(filho['Tipo Item'] || filho['Grupo'] || '').toUpperCase();
+                const qtdTotalFilho = qtdComp * coefFilho;
+
+                const isSubComp = tipoItem.includes('COMPOS') || tipoItem === 'COMP';
+
+                if (isSubComp && nivel < 2) {
+                    explodirComposicao(codFilho, qtdTotalFilho, tipoBase, nivel + 1);
+                } else {
+                    adicionarAoMap(codFilho, descFilho, unidFilho, tipoItem, qtdTotalFilho, 0, tipoBase, tipoItem);
+                }
+            });
+        }
+
+        appState.orcamento.forEach(item => {
+            if (item.tipo === 'etapa') return;
+
+            if (item.tipo === 'composicao' || item.tipo === 'sco_composicao' || item.tipo === 'base_propria') {
+                explodirComposicao(item.codigo, item.qtd, item.tipo, 0);
+            } else if (item.tipo === 'insumo' || item.tipo === 'sco_insumo') {
+                adicionarAoMap(item.codigo, item.descricao, item.unidade, 'INSUMO', item.qtd, item.precoUnitario, item.tipo);
+            } else if (item.tipo === 'item_avulso') {
+                const chaveAvulso = item.id ? `AVULSO-${item.id}` : item.descricao;
+                adicionarAoMap(chaveAvulso, item.descricao, item.unidade, item.grupo || 'MATERIAL', item.qtd, item.precoUnitario, 'item_avulso', item.grupo);
+            }
+        });
+
+        const mapaSCO = {
+            'MOD': 'MÃO DE OBRA',
+            'MOI': 'MÃO DE OBRA',
+            'MAT': 'MATERIAL',
+            'IEQ': 'EQUIPAMENTO',
+            'REQ': 'EQUIPAMENTO',
+            'EVE': 'EVENTUAIS',
+            'TRI': 'TRIBUTOS',
+            'RSE': 'SERVIÇOS'
+        };
+
+        const listaInsumos = Array.from(insumosMap.values()).map(insumo => {
+            let precoUnitario = parseFloat(insumo.precoUnitarioManual) || 0;
+
+            const isSCO = insumo.origem === 'sco_composicao' || insumo.origem === 'sco_insumo' ||
+                          insumo.codigo.startsWith('SCO-') || insumo.codigo.startsWith('MOD') ||
+                          insumo.codigo.startsWith('MOI') || insumo.codigo.startsWith('MAT') ||
+                          insumo.codigo.startsWith('IEQ') || insumo.codigo.startsWith('REQ') ||
+                          insumo.codigo.startsWith('EVE') || insumo.codigo.startsWith('TRI') ||
+                          insumo.codigo.startsWith('RSE') || insumo.codigo.startsWith('AD ');
+
+            const estadoEfetivo = isSCO ? 'RJ' : estadoConfig;
+
+            let baseInsumos = [];
+            if (isSCO) {
+                baseInsumos = (tabela === 'desonerada') ? appState.databases.sco_icd : appState.databases.sco_isd;
+            } else {
+                baseInsumos = (tabela === 'desonerada') ? appState.databases.sinapi_icd : appState.databases.sinapi_isd;
+            }
+
+            let achado = (baseInsumos || []).find(i => String(i['Código']).trim() === insumo.codigo);
+
+            if (!achado) {
+                const baseComps = isSCO 
+                    ? ((tabela === 'desonerada') ? appState.databases.sco_ccd : appState.databases.sco_csd)
+                    : ((tabela === 'desonerada') ? appState.databases.sinapi_ccd : appState.databases.sinapi_csd);
+                achado = (baseComps || []).find(i => String(i['Código']).trim() === insumo.codigo);
+            }
+
+            if (achado) {
+                if (precoUnitario <= 0) {
+                    let valEfetivo = achado[estadoEfetivo];
+                    if (valEfetivo === undefined || valEfetivo === null) valEfetivo = achado['RJ'];
+                    precoUnitario = parseFloat(valEfetivo) || 0;
+                }
+                if (!insumo.descricao || insumo.descricao.startsWith('Composição ')) {
+                    insumo.descricao = achado['Descrição'] || insumo.descricao;
+                }
+                if (!insumo.unidade || insumo.unidade === 'UN') {
+                    insumo.unidade = achado['Unidade'] || insumo.unidade;
+                }
+            }
+
+            const prefixoSCO = insumo.codigo.substring(0, 3).toUpperCase();
+            if (mapaSCO[prefixoSCO]) {
+                insumo.grupo = mapaSCO[prefixoSCO];
+            } else if (achado && achado['Grupo']) {
+                insumo.grupo = String(achado['Grupo']).toUpperCase().trim();
+            } else if (!insumo.grupo && insumo.tipoItem) {
+                insumo.grupo = insumo.tipoItem.toUpperCase();
+            }
+
+            const custoTotal = (insumo.qtdTotal * precoUnitario) || 0;
+
+            return {
+                ...insumo,
+                precoUnitario: precoUnitario,
+                custoTotal: custoTotal
+            };
+        });
+
+        const listaMaoDeObra = [];
+        const listaMateriais = [];
+
+        listaInsumos.forEach(item => {
+            const grupo = (item.grupo || item.tipoItem || '').toUpperCase();
+            const cod = (item.codigo || '').toUpperCase();
+
+            const isMaoDeObra = 
+                grupo.includes('MÃO DE OBRA') || 
+                grupo.includes('MAO DE OBRA') || 
+                cod.startsWith('MOD') || 
+                cod.startsWith('MOI');
+
+            if (isMaoDeObra) {
+                listaMaoDeObra.push(item);
+            } else {
+                listaMateriais.push(item);
+            }
+        });
+
+        listaMaoDeObra.sort((a, b) => b.custoTotal - a.custoTotal);
+        listaMateriais.sort((a, b) => b.custoTotal - a.custoTotal);
+
+        appState.cachedMaoDeObra = listaMaoDeObra;
+        appState.cachedMateriaisABC = listaMateriais;
+
+        renderizarTabelasCurvaABC(listaMaoDeObra, listaMateriais);
+    }
+
+    function renderizarTabelasCurvaABC(listaMaoDeObra, listaMateriais) {
+        const containerMaoDeObra = document.getElementById('container-tabela-mao-de-obra');
+        const containerMateriais = document.getElementById('container-tabela-materiais');
+
+        containerMaoDeObra.classList.remove('hidden');
+        containerMateriais.classList.remove('hidden');
+
+        const tbodyMaoDeObra = document.getElementById('tbody-mao-de-obra');
+        let totalCustoHH = 0;
+
+        if (listaMaoDeObra.length === 0) {
+            tbodyMaoDeObra.innerHTML = `<tr><td colspan="6" class="text-center" style="padding: 15px; color: var(--text-muted);">Nenhum insumo de Mão de Obra encontrado.</td></tr>`;
+        } else {
+            tbodyMaoDeObra.innerHTML = listaMaoDeObra.map(item => {
+                totalCustoHH += (parseFloat(item.custoTotal) || 0);
+                return `
+                    <tr>
+                        <td><strong>${item.codigo}</strong></td>
+                        <td>${item.descricao}</td>
+                        <td class="text-center">${item.unidade}</td>
+                        <td class="text-right">${item.qtdTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td class="text-right">${formatBRL(item.precoUnitario)}</td>
+                        <td class="text-right"><strong>${formatBRL(item.custoTotal)}</strong></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        document.getElementById('tfoot-hh-total-custo').innerText = formatBRL(totalCustoHH);
+
+        const tbodyMateriais = document.getElementById('tbody-materiais-abc');
+        const somaTotalMateriais = listaMateriais.reduce((acc, item) => acc + (parseFloat(item.custoTotal) || 0), 0);
+        let custoAcumulado = 0;
+
+        if (listaMateriais.length === 0) {
+            tbodyMateriais.innerHTML = `<tr><td colspan="9" class="text-center" style="padding: 15px; color: var(--text-muted);">Nenhum material ou equipamento encontrado.</td></tr>`;
+        } else {
+            tbodyMateriais.innerHTML = listaMateriais.map((item) => {
+                custoAcumulado += (parseFloat(item.custoTotal) || 0);
+                const percTotal = somaTotalMateriais > 0 ? (item.custoTotal / somaTotalMateriais) * 100 : 0;
+                const percAcum = somaTotalMateriais > 0 ? (custoAcumulado / somaTotalMateriais) * 100 : 0;
+
+                let classeABC = 'A';
+                let classeBadge = 'badge-a';
+                if (percAcum > 95.0) {
+                    classeABC = 'C';
+                    classeBadge = 'badge-c';
+                } else if (percAcum > 80.0) {
+                    classeABC = 'B';
+                    classeBadge = 'badge-b';
+                }
+
+                item.classeABC = classeABC;
+                item.percTotal = percTotal;
+                item.percAcum = percAcum;
+
+                return `
+                    <tr>
+                        <td class="text-center"><span class="badge-abc ${classeBadge}">${classeABC}</span></td>
+                        <td><strong>${item.codigo}</strong></td>
+                        <td>${item.descricao}</td>
+                        <td class="text-center">${item.unidade}</td>
+                        <td class="text-right">${item.qtdTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>
+                        <td class="text-right">${formatBRL(item.precoUnitario)}</td>
+                        <td class="text-right"><strong>${formatBRL(item.custoTotal)}</strong></td>
+                        <td class="text-right">${percTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
+                        <td class="text-right">${percAcum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        document.getElementById('tfoot-materiais-total-custo').innerText = formatBRL(somaTotalMateriais);
+        containerMaoDeObra.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function gerarCurvaABCOrcamento() {
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            alert('O orçamento está vazio. Adicione itens primeiro.');
+            return;
+        }
+
+        const estadoConfig = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+        const bdi = parseFloat(document.getElementById('input-bdi').value) || 0;
+
+        const itensValidos = appState.orcamento.filter(item => item.tipo !== 'etapa');
+
+        const listaCalculada = itensValidos.map(item => {
+            const precoUnitarioBase = obterPrecoAtualizadoDoItem(item, estadoConfig, tabela);
+            const precoComBdi = precoUnitarioBase * (1 + bdi / 100);
+            const custoTotal = precoComBdi * item.qtd;
+
+            return {
+                ...item,
+                precoComBdi: precoComBdi,
+                custoTotal: custoTotal
+            };
+        });
+
+        listaCalculada.sort((a, b) => b.custoTotal - a.custoTotal);
+
+        const somaTotal = listaCalculada.reduce((acc, item) => acc + item.custoTotal, 0);
+        let custoAcumulado = 0;
+
+        const tbody = document.getElementById('tbody-abc-orcamento');
+
+        if (listaCalculada.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="padding: 15px; color: var(--text-muted);">Nenhum serviço válido para cálculo na Curva ABC.</td></tr>`;
+        } else {
+            tbody.innerHTML = listaCalculada.map((item) => {
+                custoAcumulado += item.custoTotal;
+                const percTotal = somaTotal > 0 ? (item.custoTotal / somaTotal) * 100 : 0;
+                const percAcum = somaTotal > 0 ? (custoAcumulado / somaTotal) * 100 : 0;
+
+                let classeABC = 'A';
+                let classeBadge = 'badge-a';
+                if (percAcum > 95.0) {
+                    classeABC = 'C';
+                    classeBadge = 'badge-c';
+                } else if (percAcum > 80.0) {
+                    classeABC = 'B';
+                    classeBadge = 'badge-b';
+                }
+
+                item.classeABC = classeABC;
+                item.percTotal = percTotal;
+                item.percAcum = percAcum;
+
+                return `
+                    <tr>
+                        <td class="text-center"><span class="badge-abc ${classeBadge}">${classeABC}</span></td>
+                        <td>${item.itemEap}</td>
+                        <td><strong>${item.codigo}</strong></td>
+                        <td>${item.descricao}</td>
+                        <td class="text-center">${item.unidade}</td>
+                        <td class="text-right">${item.qtd.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>
+                        <td class="text-right">${formatBRL(item.precoComBdi)}</td>
+                        <td class="text-right"><strong>${formatBRL(item.custoTotal)}</strong></td>
+                        <td class="text-right">${percTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
+                        <td class="text-right">${percAcum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        document.getElementById('tfoot-abc-orcamento-total').innerText = formatBRL(somaTotal);
+        appState.cachedServicosABC = listaCalculada;
+
+        const container = document.getElementById('container-abc-orcamento');
+        container.classList.remove('hidden');
+        document.getElementById('section-abc-orcamento').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    /* ==========================================================================
+       EXPORTAÇÕES EXCEL E CSV
+       ========================================================================== */
+    function downloadArquivo(conteudo, nomeArquivo, mimeType) {
+        const blob = new Blob([conteudo], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nomeArquivo;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function exportarTabelaCSV(nomeArquivo, cabecalhos, linhas) {
+        let csvContent = '\uFEFF' + cabecalhos.join(';') + '\n';
+        linhas.forEach(linha => {
+            const linhaFormatada = linha.map(campo => {
+                if (campo === null || campo === undefined) return '""';
+                let str = String(campo).replace(/"/g, '""');
+                return `"${str}"`;
+            });
+            csvContent += linhaFormatada.join(';') + '\n';
+        });
+        downloadArquivo(csvContent, `${nomeArquivo}_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
+    }
+
+    function exportarOrcamentoCSV() {
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            alert('Não há itens no orçamento para exportar.');
+            return;
+        }
+
+        const estado = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+        const bdi = parseFloat(document.getElementById('input-bdi').value) || 0;
+
+        const cabecalhos = ['Item EAP', 'Tipo', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Preço Unitário (R$)', 'Preço c/ BDI (R$)', 'Total (R$)'];
+        const linhas = appState.orcamento.map(item => {
+            if (item.tipo === 'etapa') {
+                return [item.itemEap, 'ETAPA', '', item.descricao, '', '', '', '', ''];
+            }
+            const precoUn = obterPrecoAtualizadoDoItem(item, estado, tabela);
+            const precoComBdi = precoUn * (1 + bdi / 100);
+            const total = precoComBdi * item.qtd;
+
+            return [
+                item.itemEap,
+                item.tipo.toUpperCase(),
+                item.codigo,
+                item.descricao,
+                item.unidade,
+                item.qtd.toFixed(3).replace('.', ','),
+                precoUn.toFixed(2).replace('.', ','),
+                precoComBdi.toFixed(2).replace('.', ','),
+                total.toFixed(2).replace('.', ',')
+            ];
+        });
+
+        exportarTabelaCSV('Orcamento_Obra', cabecalhos, linhas);
+    }
+
+    function exportarMaoDeObraCSV() {
+        if (!appState.cachedMaoDeObra || appState.cachedMaoDeObra.length === 0) gerarLevantamentoCurvaABC();
+        if (!appState.cachedMaoDeObra || appState.cachedMaoDeObra.length === 0) {
+            alert('Nenhum dado de mão de obra disponível.');
+            return;
+        }
+
+        const cabecalhos = ['Código', 'Descrição / Função', 'Unidade', 'Quantidade Total', 'Preço Unitário (R$)', 'Custo Total (R$)'];
+        const linhas = appState.cachedMaoDeObra.map(item => [
+            item.codigo,
+            item.descricao,
+            item.unidade,
+            item.qtdTotal.toFixed(2).replace('.', ','),
+            item.precoUnitario.toFixed(2).replace('.', ','),
+            item.custoTotal.toFixed(2).replace('.', ',')
+        ]);
+
+        exportarTabelaCSV('Levantamento_Mao_de_Obra', cabecalhos, linhas);
+    }
+
+    function exportarCurvaABCMateriaisCSV() {
+        if (!appState.cachedMateriaisABC || appState.cachedMateriaisABC.length === 0) gerarLevantamentoCurvaABC();
+        if (!appState.cachedMateriaisABC || appState.cachedMateriaisABC.length === 0) {
+            alert('Nenhum dado de materiais disponível na Curva ABC.');
+            return;
+        }
+
+        const cabecalhos = ['Classe', 'Código', 'Descrição do Material / Insumo', 'Unidade', 'Quantidade Total', 'Preço Unitário (R$)', 'Custo Total (R$)', '% Total', '% Acumulada'];
+        const linhas = appState.cachedMateriaisABC.map(item => [
+            item.classeABC || '',
+            item.codigo,
+            item.descricao,
+            item.unidade,
+            item.qtdTotal.toFixed(3).replace('.', ','),
+            item.precoUnitario.toFixed(2).replace('.', ','),
+            item.custoTotal.toFixed(2).replace('.', ','),
+            (item.percTotal || 0).toFixed(2).replace('.', ',') + '%',
+            (item.percAcum || 0).toFixed(2).replace('.', ',') + '%'
+        ]);
+
+        exportarTabelaCSV('Curva_ABC_Materiais_Equipamentos', cabecalhos, linhas);
+    }
+
+    function exportarCurvaABCServicosCSV() {
+        if (!appState.cachedServicosABC || appState.cachedServicosABC.length === 0) gerarCurvaABCOrcamento();
+        if (!appState.cachedServicosABC || appState.cachedServicosABC.length === 0) {
+            alert('Nenhum dado disponível na Curva ABC de Serviços.');
+            return;
+        }
+
+        const cabecalhos = ['Classe', 'Item EAP', 'Código', 'Descrição do Serviço', 'Unidade', 'Quantidade', 'Preço c/ BDI (R$)', 'Custo Total (R$)', '% Total', '% Acumulada'];
+        const linhas = appState.cachedServicosABC.map(item => [
+            item.classeABC || '',
+            item.itemEap,
+            item.codigo,
+            item.descricao,
+            item.unidade,
+            item.qtd.toFixed(3).replace('.', ','),
+            item.precoComBdi.toFixed(2).replace('.', ','),
+            item.custoTotal.toFixed(2).replace('.', ','),
+            (item.percTotal || 0).toFixed(2).replace('.', ',') + '%',
+            (item.percAcum || 0).toFixed(2).replace('.', ',') + '%'
+        ]);
+
+        exportarTabelaCSV('Curva_ABC_Servicos_Orcamento', cabecalhos, linhas);
+    }
+
+    function exportarPlanilhaCompletaExcel() {
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            alert('Adicione itens ao orçamento antes de exportar o caderno completo.');
+            return;
+        }
+
+        gerarLevantamentoCurvaABC();
+        gerarCurvaABCOrcamento();
+
+        const estado = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+        const bdi = parseFloat(document.getElementById('input-bdi').value) || 0;
+
+        function escapeXml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function createCell(data, type = 'String', style = '') {
+            const styleAttr = style ? ` ss:StyleID="${style}"` : '';
+            return `<Cell${styleAttr}><Data ss:Type="${type}">${escapeXml(data)}</Data></Cell>`;
+        }
+
+        let orcamentoRows = `
+            <Row ss:StyleID="HeaderStyle">
+                ${createCell('Item EAP')}
+                ${createCell('Tipo')}
+                ${createCell('Código')}
+                ${createCell('Descrição')}
+                ${createCell('Unidade')}
+                ${createCell('Quantidade')}
+                ${createCell('Preço Unitário (R$)')}
+                ${createCell('Preço c/ BDI (R$)')}
+                ${createCell('Total (R$)')}
+            </Row>
+        `;
+
+        let subtotalOrc = 0;
+        appState.orcamento.forEach(item => {
+            if (item.tipo === 'etapa') {
+                orcamentoRows += `
+                    <Row ss:StyleID="EtapaStyle">
+                        ${createCell(item.itemEap)}
+                        ${createCell('ETAPA')}
+                        ${createCell('-')}
+                        ${createCell(item.descricao)}
+                        ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                    </Row>
+                `;
+            } else {
+                const precoUn = obterPrecoAtualizadoDoItem(item, estado, tabela);
+                const precoComBdi = precoUn * (1 + bdi / 100);
+                const totalLinha = precoComBdi * item.qtd;
+                subtotalOrc += precoUn * item.qtd;
+
+                orcamentoRows += `
+                    <Row>
+                        ${createCell(item.itemEap)}
+                        ${createCell(item.tipo.toUpperCase())}
+                        ${createCell(item.codigo)}
+                        ${createCell(item.descricao)}
+                        ${createCell(item.unidade, 'String', 'CenterStyle')}
+                        ${createCell(item.qtd, 'Number', 'Number3Dec')}
+                        ${createCell(precoUn, 'Number', 'CurrencyStyle')}
+                        ${createCell(precoComBdi, 'Number', 'CurrencyStyle')}
+                        ${createCell(totalLinha, 'Number', 'CurrencyBoldStyle')}
+                    </Row>
+                `;
+            }
+        });
+
+        const valorBdiOrc = subtotalOrc * (bdi / 100);
+        const totalGeralOrc = subtotalOrc + valorBdiOrc;
+
+        orcamentoRows += `
+            <Row></Row>
+            <Row ss:StyleID="TotalFooterStyle">
+                ${createCell('SUBTOTAL (SEM BDI):')}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(subtotalOrc, 'Number', 'CurrencyBoldStyle')}
+            </Row>
+            <Row ss:StyleID="TotalFooterStyle">
+                ${createCell(`VALOR DO BDI (${bdi.toFixed(2)}%):`)}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(valorBdiOrc, 'Number', 'CurrencyBoldStyle')}
+            </Row>
+            <Row ss:StyleID="GrandTotalStyle">
+                ${createCell('TOTAL GERAL DO ORÇAMENTO:')}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(totalGeralOrc, 'Number', 'CurrencyGrandTotalStyle')}
+            </Row>
+        `;
+
+        let moRows = `
+            <Row ss:StyleID="HeaderStyle">
+                ${createCell('Código')}
+                ${createCell('Descrição / Função')}
+                ${createCell('Unidade')}
+                ${createCell('Quantidade Total (HH)')}
+                ${createCell('Preço Unitário (R$)')}
+                ${createCell('Custo Total (R$)')}
+            </Row>
+        `;
+        let totalMoCusto = 0;
+        let totalMoHoras = 0;
+        (appState.cachedMaoDeObra || []).forEach(item => {
+            totalMoCusto += (item.custoTotal || 0);
+            totalMoHoras += (item.qtdTotal || 0);
+            moRows += `
+                <Row>
+                    ${createCell(item.codigo)}
+                    ${createCell(item.descricao)}
+                    ${createCell(item.unidade, 'String', 'CenterStyle')}
+                    ${createCell(item.qtdTotal, 'Number', 'Number2Dec')}
+                    ${createCell(item.precoUnitario, 'Number', 'CurrencyStyle')}
+                    ${createCell(item.custoTotal, 'Number', 'CurrencyBoldStyle')}
+                </Row>
+            `;
+        });
+        moRows += `
+            <Row></Row>
+            <Row ss:StyleID="GrandTotalStyle">
+                ${createCell('TOTAL DE MÃO DE OBRA:')}
+                ${createCell('')}
+                ${createCell('H', 'String', 'CenterStyle')}
+                ${createCell(totalMoHoras, 'Number', 'Number2DecBold')}
+                ${createCell('')}
+                ${createCell(totalMoCusto, 'Number', 'CurrencyGrandTotalStyle')}
+            </Row>
+        `;
+
+        let matRows = `
+            <Row ss:StyleID="HeaderStyle">
+                ${createCell('Classe')}
+                ${createCell('Código')}
+                ${createCell('Descrição do Material / Insumo')}
+                ${createCell('Unidade')}
+                ${createCell('Quantidade Total')}
+                ${createCell('Preço Unitário (R$)')}
+                ${createCell('Custo Total (R$)')}
+                ${createCell('% Total')}
+                ${createCell('% Acumulada')}
+            </Row>
+        `;
+        let totalMatCusto = 0;
+        (appState.cachedMateriaisABC || []).forEach(item => {
+            totalMatCusto += (item.custoTotal || 0);
+            matRows += `
+                <Row>
+                    ${createCell(item.classeABC || 'A', 'String', 'CenterStyle')}
+                    ${createCell(item.codigo)}
+                    ${createCell(item.descricao)}
+                    ${createCell(item.unidade, 'String', 'CenterStyle')}
+                    ${createCell(item.qtdTotal, 'Number', 'Number3Dec')}
+                    ${createCell(item.precoUnitario, 'Number', 'CurrencyStyle')}
+                    ${createCell(item.custoTotal, 'Number', 'CurrencyBoldStyle')}
+                    ${createCell((item.percTotal || 0) / 100, 'Number', 'PercentStyle')}
+                    ${createCell((item.percAcum || 0) / 100, 'Number', 'PercentStyle')}
+                </Row>
+            `;
+        });
+        matRows += `
+            <Row></Row>
+            <Row ss:StyleID="GrandTotalStyle">
+                ${createCell('TOTAL DE MATERIAIS:')}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(totalMatCusto, 'Number', 'CurrencyGrandTotalStyle')}
+                ${createCell(1.00, 'Number', 'PercentStyle')}
+                ${createCell(1.00, 'Number', 'PercentStyle')}
+            </Row>
+        `;
+
+        let servRows = `
+            <Row ss:StyleID="HeaderStyle">
+                ${createCell('Classe')}
+                ${createCell('Item EAP')}
+                ${createCell('Código')}
+                ${createCell('Descrição do Serviço')}
+                ${createCell('Unidade')}
+                ${createCell('Quantidade')}
+                ${createCell('Preço c/ BDI (R$)')}
+                ${createCell('Custo Total (R$)')}
+                ${createCell('% Total')}
+                ${createCell('% Acumulada')}
+            </Row>
+        `;
+        let totalServCusto = 0;
+        (appState.cachedServicosABC || []).forEach(item => {
+            totalServCusto += (item.custoTotal || 0);
+            servRows += `
+                <Row>
+                    ${createCell(item.classeABC || 'A', 'String', 'CenterStyle')}
+                    ${createCell(item.itemEap)}
+                    ${createCell(item.codigo)}
+                    ${createCell(item.descricao)}
+                    ${createCell(item.unidade, 'String', 'CenterStyle')}
+                    ${createCell(item.qtd, 'Number', 'Number3Dec')}
+                    ${createCell(item.precoComBdi, 'Number', 'CurrencyStyle')}
+                    ${createCell(item.custoTotal, 'Number', 'CurrencyBoldStyle')}
+                    ${createCell((item.percTotal || 0) / 100, 'Number', 'PercentStyle')}
+                    ${createCell((item.percAcum || 0) / 100, 'Number', 'PercentStyle')}
+                </Row>
+            `;
+        });
+        servRows += `
+            <Row></Row>
+            <Row ss:StyleID="GrandTotalStyle">
+                ${createCell('TOTAL GERAL DOS SERVIÇOS:')}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(totalServCusto, 'Number', 'CurrencyGrandTotalStyle')}
+                ${createCell(1.00, 'Number', 'PercentStyle')}
+                ${createCell(1.00, 'Number', 'PercentStyle')}
+            </Row>
+        `;
+
+        const workbookXml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/></Style>
+  <Style ss:ID="HeaderStyle"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/><Interior ss:Color="#1E3C72" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="EtapaStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#0F172A" ss:Bold="1"/><Interior ss:Color="#CBD5E1" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="CenterStyle"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>
+  <Style ss:ID="Number2Dec"><NumberFormat ss:Format="#,##0.00"/></Style>
+  <Style ss:ID="Number2DecBold"><Font ss:FontName="Calibri" ss:Bold="1"/><NumberFormat ss:Format="#,##0.00"/></Style>
+  <Style ss:ID="Number3Dec"><NumberFormat ss:Format="#,##0.000"/></Style>
+  <Style ss:ID="CurrencyStyle"><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
+  <Style ss:ID="CurrencyBoldStyle"><Font ss:FontName="Calibri" ss:Bold="1"/><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
+  <Style ss:ID="PercentStyle"><NumberFormat ss:Format="0.00%"/></Style>
+  <Style ss:ID="TotalFooterStyle"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#334155"/><Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="GrandTotalStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1E293B"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="CurrencyGrandTotalStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#0D6EFD"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
+ </Styles>
+ <Worksheet ss:Name="Orçamento Analítico"><Table>${orcamentoRows}</Table></Worksheet>
+ <Worksheet ss:Name="Mão de Obra (HH)"><Table>${moRows}</Table></Worksheet>
+ <Worksheet ss:Name="Curva ABC Materiais"><Table>${matRows}</Table></Worksheet>
+ <Worksheet ss:Name="Curva ABC Serviços"><Table>${servRows}</Table></Worksheet>
+</Workbook>`;
+
+        downloadArquivo(workbookXml, `Caderno_Orcamento_Planejamento_${new Date().toISOString().slice(0,10)}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
+    }
+
+    function exportarOrcamentoJSON() {
+        const data = {
+            configuracoes: {
+                estado: document.getElementById('select-estado').value,
+                tabela: document.getElementById('select-tabela').value,
+                bdi: document.getElementById('input-bdi').value,
+                data_base: document.getElementById('select-data-base').value
+            },
+            itens: appState.orcamento
+        };
+        downloadArquivo(JSON.stringify(data, null, 2), `orcamento_obra_${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+    }
+
+    function importarOrcamentoJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (imported.configuracoes) {
+                    if (imported.configuracoes.estado) document.getElementById('select-estado').value = imported.configuracoes.estado;
+                    if (imported.configuracoes.tabela) document.getElementById('select-tabela').value = imported.configuracoes.tabela;
+                    if (imported.configuracoes.bdi) document.getElementById('input-bdi').value = imported.configuracoes.bdi;
+                    if (imported.configuracoes.data_base) {
+                        const selectDataBase = document.getElementById('select-data-base');
+                        if (Array.from(selectDataBase.options).some(opt => opt.value === imported.configuracoes.data_base)) {
+                            selectDataBase.value = imported.configuracoes.data_base;
+                        }
+                    }
+                }
+                if (Array.isArray(imported.itens)) {
+                    appState.orcamento = imported.itens;
+                    appState.nextId = Math.max(...imported.itens.map(i => i.id || 0), 0) + 1;
+                }
+                atualizarOrcamentoEBusca();
+                alert('Orçamento importado com sucesso!');
+            } catch (err) {
+                alert('Erro ao importar o ficheiro JSON de orçamento.');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function limparOrcamento() {
+        if (confirm('Tem certeza que deseja limpar todo o orçamento atual?')) {
+            appState.orcamento = [];
+            renderizarOrcamento();
+            document.getElementById('container-tabela-mao-de-obra').classList.add('hidden');
+            document.getElementById('container-tabela-materiais').classList.add('hidden');
+            document.getElementById('container-abc-orcamento').classList.add('hidden');
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        atualizarCamposDinamicosFormulario('etapa');
+        carregarBases();
+    });
+
+    function incrementarEAP() {
+        const input = document.getElementById('input-item-eap');
+        const valor = input.value.trim();
+        if (!valor) {
+            input.value = '1.1';
+            return;
+        }
+        const partes = valor.split('.');
+        const ultimoIndice = partes.length - 1;
+        const ultimoNumero = parseInt(partes[ultimoIndice], 10);
+        if (!isNaN(ultimoNumero)) {
+            partes[ultimoIndice] = ultimoNumero + 1;
+            input.value = partes.join('.');
+        } else {
+            input.value = valor + '.1';
+        }
+    }
+
+
 </script>
 
 </body>
