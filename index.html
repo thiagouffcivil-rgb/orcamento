@@ -400,7 +400,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        // A linha abaixo foi corrigida para importar o signInWithRedirect
+        import { getAuth, signInWithRedirect, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
           apiKey: "AIzaSyC48UDggA3vBwrBDQH3uBhcPEsjGd4oUjM",
@@ -419,11 +420,11 @@
         window.orcamentoAtualId = null; 
         window.currentUser = null;
 
-// ========================================================
+        // ========================================================
         // 🔒 LISTA DE EMAILS ESPECÍFICOS AUTORIZADOS
         // ========================================================
         const emailsPermitidos = [
-            "seu.email.pessoal@gmail.com", // Para e-mails fora do domínio INCA
+            "seu.email.pessoal@gmail.com", // Coloque o seu Gmail aqui
             "colega@uff.br"
         ];
         // ========================================================
@@ -435,15 +436,14 @@
             const userNameDisplay = document.getElementById('user-name-display');
             
             if (user) {
-                // NOVA VERIFICAÇÃO: O e-mail está na lista OU termina em @inca.gov.br?
+                // VERIFICAÇÃO: O e-mail está na lista OU termina em @inca.gov.br?
                 if (emailsPermitidos.includes(user.email) || user.email.endsWith("@inca.gov.br")) {
                     window.currentUser = user;
                     loginUi.style.display = 'none';
                     appUi.style.display = 'block';
                     if(userNameDisplay) userNameDisplay.innerText = user.displayName || user.email;
-                    carregarListaNuvem(); // Carrega os orçamentos após login confirmado
+                    carregarListaNuvem(); 
                 } else {
-                    // E-mail não autorizado - bloqueia o acesso
                     alert(`Acesso negado: O e-mail "${user.email}" não tem permissão para aceder à nuvem.`);
                     await signOut(auth);
                     window.currentUser = null;
@@ -459,13 +459,14 @@
 
         window.loginComGoogle = async function() {
             try {
-                // Usa o redirecionamento em vez de abrir uma janela pop-up
+                // Agora o signInWithRedirect vai funcionar perfeitamente
                 await signInWithRedirect(auth, provider);
             } catch(e) {
                 console.error("Erro ao iniciar redirecionamento:", e);
                 alert("Erro ao contactar os servidores do Google.");
             }
         };
+
 
         window.logoutNuvem = async function() {
             try {
