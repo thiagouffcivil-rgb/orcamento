@@ -300,7 +300,6 @@
         tbody tr:nth-child(even) { background-color: #fafafa; }
         tbody tr:hover { background-color: #f1f7ff; }
 
-        /* Estilo Especial para Linhas de "Etapa" na Tabela */
         tr.row-etapa {
             background-color: #e2e8f0 !important;
             font-weight: bold;
@@ -376,13 +375,12 @@
             font-weight: 700;
             color: white;
         }
-        .badge-a { background-color: #dc3545; } /* Classe A - Crítico (Vermelho) */
-        .badge-b { background-color: #ffc107; color: #000; } /* Classe B - Intermediário (Amarelo) */
-        .badge-c { background-color: #198754; } /* Classe C - Baixo impacto (Verde) */
+        .badge-a { background-color: #dc3545; }
+        .badge-b { background-color: #ffc107; color: #000; }
+        .badge-c { background-color: #198754; }
 
         .hidden { display: none !important; }
 
-        /* Estilos de Impressão */
         @media print {
             body { background-color: white; padding: 0; }
             .no-print, .section-card:not(#section-orcamento):not(#section-curva-abc):not(#section-abc-orcamento), .toolbar, .actions-col {
@@ -398,10 +396,11 @@
         }
     </style>
 
-<!-- SDKs do Firebase (Firestore) com Gestão e Edição Direta -->
+<!-- SDKs do Firebase (Firestore + Auth Google com Restrição de Acesso) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
           apiKey: "AIzaSyC48UDggA3vBwrBDQH3uBhcPEsjGd4oUjM",
@@ -414,10 +413,74 @@
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const auth = getAuth(app);
+        const provider = new GoogleAuthProvider();
 
         window.orcamentoAtualId = null; 
+        window.currentUser = null;
+
+        // ========================================================
+        // 🔒 LISTA DE EMAILS AUTORIZADOS (Configure a sua equipa aqui)
+        // ========================================================
+        const emailsPermitidos = [
+            "o.seu.email.principal@gmail.com",
+            "engenharia@inca.gov.br",
+            "colega@uff.br"
+        ];
+        // ========================================================
+
+        // Monitorizar estado de autenticação
+        onAuthStateChanged(auth, async (user) => {
+            const loginUi = document.getElementById('cloud-login-ui');
+            const appUi = document.getElementById('cloud-app-ui');
+            const userNameDisplay = document.getElementById('user-name-display');
+            
+            if (user) {
+                // VERIFICAÇÃO DE SEGURANÇA: O email está na lista?
+                if (emailsPermitidos.includes(user.email)) {
+                    window.currentUser = user;
+                    loginUi.style.display = 'none';
+                    appUi.style.display = 'block';
+                    if(userNameDisplay) userNameDisplay.innerText = user.displayName || user.email;
+                    carregarListaNuvem(); // Carrega os dados só depois de confirmar o login e a permissão
+                } else {
+                    // Email não autorizado - expulsa o utilizador
+                    alert(`Acesso negado: O e-mail "${user.email}" não tem permissão para aceder à nuvem de orçamentos da equipa.`);
+                    await signOut(auth);
+                    window.currentUser = null;
+                    loginUi.style.display = 'block';
+                    appUi.style.display = 'none';
+                }
+            } else {
+                window.currentUser = null;
+                loginUi.style.display = 'block';
+                appUi.style.display = 'none';
+            }
+        });
+
+        window.loginComGoogle = async function() {
+            try {
+                await signInWithPopup(auth, provider);
+            } catch(e) {
+                console.error(e);
+                alert("Erro ao autenticar com o Google.");
+            }
+        };
+
+        window.logoutNuvem = async function() {
+            try {
+                await signOut(auth);
+                window.orcamentoAtualId = null;
+            } catch(e) {
+                console.error(e);
+            }
+        };
 
         window.salvarOrcamentoNaNuven = async function() {
+            if (!window.currentUser) {
+                alert("Precisa de iniciar sessão na secção 'Nuvem' antes de guardar.");
+                return;
+            }
             try {
                 if (window.orcamentoAtualId) {
                     const docRef = doc(db, "orcamentos", window.orcamentoAtualId);
@@ -429,7 +492,8 @@
                             data_base: document.getElementById('select-data-base').value
                         },
                         itens: appState.orcamento,
-                        atualizadoEm: serverTimestamp()
+                        atualizadoEm: serverTimestamp(),
+                        atualizadoPor: window.currentUser.email
                     });
                     alert("✅ Orçamento atualizado com sucesso na nuvem!");
                 } else {
@@ -446,7 +510,8 @@
                             data_base: document.getElementById('select-data-base').value
                         },
                         itens: appState.orcamento,
-                        criadoEm: serverTimestamp()
+                        criadoEm: serverTimestamp(),
+                        criadoPor: window.currentUser.email
                     });
                     
                     window.orcamentoAtualId = docRef.id;
@@ -454,12 +519,13 @@
                 }
                 carregarListaNuvem();
             } catch (e) {
-                console.error("Erro detalhado ao salvar:", e);
-                alert("❌ Erro ao salvar orçamento na nuvem. Verifique a consola (F12) para detalhes.");
+                console.error("Erro detalhado ao guardar:", e);
+                alert("❌ Erro ao guardar orçamento na nuvem. Tem as permissões corretas no Firestore?");
             }
         };
 
         window.carregarListaNuvem = async function() {
+            if (!window.currentUser) return;
             const container = document.getElementById('lista-orcamentos-nuvem');
             if (!container) return;
             
@@ -481,28 +547,29 @@
                 html += `
                         </select>
                         <button class="btn btn-primary" onclick="carregarSelecionadoDaNuven()">📂 Abrir / Editar</button>
-                        <button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁️️ Salvar na Nuvem</button>
+                        <button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁️ Guardar na Nuvem</button>
                         <button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button>
                     </div>
                 `;
-                container.innerHTML = querySnapshot.size > 0 ? html : `<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;"><span style="flex:1; color:var(--text-muted);">Nenhum orçamento guardado na nuvem ainda.</span><button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁️ Salvar na Nuvem</button><button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button></div>`;
+                container.innerHTML = querySnapshot.size > 0 ? html : `<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;"><span style="flex:1; color:var(--text-muted);">Nenhum orçamento guardado na nuvem ainda.</span><button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarOrcamentoNaNuven()">☁ Guardar na Nuvem</button><button class="btn btn-secondary" onclick="carregarListaNuvem()">🔄 Atualizar</button></div>`;
             } catch (e) {
                 console.error("Erro ao carregar lista:", e);
-                container.innerHTML = "Erro ao ligar ao banco de dados da nuvem.";
+                container.innerHTML = "Erro ao ligar à base de dados da nuvem. Verifique as Regras do Firestore.";
             }
         };
 
         window.carregarSelecionadoDaNuven = function() {
             const select = document.getElementById('select-orcamento-nuvem');
             if (!select || !select.value) {
-                alert("Por favor, selecione um orçamento na lista suspensa.");
+                alert("Por favor, selecione um orçamento na lista pendente.");
                 return;
             }
             window.carregarOrcamentoDaNuven(select.value);
         };
 
         window.carregarOrcamentoDaNuven = async function(id) {
-            if (!confirm("Deseja carregar este orçamento? Os itens atuais da tela serão substituídos.")) return;
+            if (!window.currentUser) return;
+            if (!confirm("Deseja carregar este orçamento? Os itens atuais no ecrã serão substituídos.")) return;
             try {
                 const docRef = doc(db, "orcamentos", id);
                 const docSnap = await getDoc(docRef);
@@ -528,10 +595,6 @@
                 alert("Erro ao descarregar o orçamento.");
             }
         };
-
-        window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(carregarListaNuvem, 1500);
-        });
     </script>
 
 </head>
@@ -559,13 +622,29 @@
     </div>
 
     <!-- SESSÃO EXTRA: ORÇAMENTOS COMPARTILHADOS NA NUVEM -->
-    <section class="section-card no-print">
+    <section class="section-card no-print" id="section-nuvem">
         <h2 class="section-title">
             <span><span>☁️</span> Orçamentos Colaborativos na Nuvem</span>
             <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Trabalhe em conjunto com os seus colegas em tempo real</span>
         </h2>
-        <div id="lista-orcamentos-nuvem" style="padding: 10px; color: var(--text-muted);">
-            A ligar à base de dados na nuvem...
+        
+        <!-- Tela de Login (Visível quando sem sessão) -->
+        <div id="cloud-login-ui" style="background: #f8fafc; padding: 20px; border-radius: 6px; border: 1px solid var(--border-color); display: none; text-align: center;">
+            <p style="margin-bottom: 15px; font-size: 0.95rem; color: #475569;"><strong>Acesso Restrito:</strong> Este painel partilhado é de uso exclusivo da equipe autorizada. Faça login com a sua conta Google para aceder.</p>
+            <button class="btn btn-primary" style="background-color: #4285F4; font-size: 1.1rem; padding: 12px 24px;" onclick="loginComGoogle()">
+                <span style="background: white; border-radius: 50%; padding: 2px 6px; margin-right: 8px; color: #4285F4; font-weight: bold;">G</span> Continuar com o Google
+            </button>
+        </div>
+
+        <!-- Área Autenticada (Visível com sessão iniciada) -->
+        <div id="cloud-app-ui" style="display: none;">
+            <div id="lista-orcamentos-nuvem" style="padding: 10px 0; color: var(--text-muted);">
+                A ligar à base de dados na nuvem...
+            </div>
+            <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
+                <span style="font-size: 0.9rem; color: #6c757d;">Sessão iniciada como: <strong id="user-name-display">...</strong></span>
+                <button class="btn btn-sm btn-outline" style="color: var(--danger);" onclick="logoutNuvem()">🚪 Terminar Sessão</button>
+            </div>
         </div>
     </section>
 
@@ -622,7 +701,7 @@
                 <select id="select-data-base" onchange="carregarBases()">
                     <option value="2026_08" selected>Agosto / 2026</option>
                     <option value="2026_07">Julho / 2026</option>
-            </select>
+                </select>
             </div>
 
             <div class="form-group">
@@ -768,7 +847,7 @@
         </div>
 
         <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-            <button class="btn btn-success" onclick="adicionarItemAoOrcamento()">➕ Adicionar ao Orçamento</button>
+            <button class="btn btn-success" onclick="adicionarItemAoOrcamento();incrementarEAP()">➕ Adicionar ao Orçamento</button>
         </div>
     </section>
 
@@ -821,7 +900,7 @@
 
         <!-- Toolbar com Ações Adicionais e Exportações Excel -->
         <div class="toolbar no-print">
-            <button class="btn btn-primary" onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
+            <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
             <button class="btn btn-success" style="background-color: #107c41;" onclick="exportarPlanilhaCompletaExcel()">📑 Exportar Caderno Completo (Excel Multi-Abas)</button>
             <button class="btn btn-secondary" onclick="exportarOrcamentoCSV()">📊 Exportar Orçamento (CSV / Excel)</button>
             <button class="btn btn-secondary" onclick="exportarOrcamentoJSON()">📥 Exportar Orçamento (JSON)</button>
@@ -863,7 +942,10 @@
                     <input type="radio" name="fabrica_modo" value="manual" checked> 100% Manual (Preço Fixo)
                 </label>
                 <label class="radio-option" onclick="selectFabricaModoRadio(this, 'adaptar')">
-                    <input type="radio" name="fabrica_modo" value="adaptar"> Adaptar Composição (SINAPI, SCO ou Própria)
+                    <input type="radio" name="fabrica_modo" value="adaptar"> Adaptar Composição (SINAPI/SCO)
+                </label>
+                <label class="radio-option" onclick="selectFabricaModoRadio(this, 'mista')">
+                    <input type="radio" name="fabrica_modo" value="mista"> Composição Mista (Inventar & Bases)
                 </label>
             </div>
         </div>
@@ -895,9 +977,12 @@
                 </div>
                 <button class="btn btn-primary" onclick="carregarReceitaMae()">📖 Carregar Receita</button>
             </div>
+        </div>
 
+        <!-- Painel Modo Misto / Avulso (Visível em Adaptar ou Mista) -->
+        <div id="fabrica-panel-ingredientes-container" class="hidden" style="margin-top: 15px;">
             <!-- Tabela de Ingredientes / Receita da Composição -->
-            <div class="table-responsive" style="margin-top: 15px;">
+            <div class="table-responsive">
                 <table>
                     <thead>
                         <tr>
@@ -914,16 +999,16 @@
                     <tbody id="tbody-fabrica-receita">
                         <tr>
                             <td colspan="8" class="text-center" style="padding: 15px; color: var(--text-muted);">
-                                Nenhuma receita carregada. Digite o código mãe acima ou adicione ingredientes manualmente.
+                                Nenhuma receita carregada. Adicione ingredientes abaixo.
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Adicionar Novo Ingrediente à Receita com Seleção Explícita de Grupo -->
+            <!-- Adicionar Ingrediente da Base -->
             <div style="background: #f8fafc; padding: 14px; border: 1px solid var(--border-color); border-radius: 6px; margin-top: 12px;">
-                <label style="margin-bottom: 8px; display: block;">➕ Adicionar Novo Ingrediente à Receita:</label>
+                <label style="margin-bottom: 8px; display: block;">➕ Adicionar Ingrediente das Bases (SINAPI/SCO/Própria):</label>
                 <div class="form-grid" style="align-items: flex-end;">
                     <div class="form-group">
                         <label for="input-ingrediente-codigo">Cód do Item:</label>
@@ -953,7 +1038,44 @@
                         <label for="input-ingrediente-coef">Coeficiente:</label>
                         <input type="number" id="input-ingrediente-coef" step="0.0001" min="0" value="1.0000">
                     </div>
-                    <button class="btn btn-secondary" onclick="adicionarIngredienteManualAorReceita()">➕ Adicionar</button>
+                    <button class="btn btn-secondary" onclick="adicionarIngredienteManualAorReceita()">➕ Adicionar da Base</button>
+                </div>
+            </div>
+
+            <!-- Adicionar Ingrediente Avulso / Inventado do Zero -->
+            <div style="background: #f0fdf4; padding: 14px; border: 1px solid #bbf7d0; border-radius: 6px; margin-top: 12px;">
+                <label style="margin-bottom: 8px; display: block; color: #166534;">💡 Inventar / Criar Ingrediente Avulso (Cotação Local ou Especial):</label>
+                <div class="form-grid" style="align-items: flex-end;">
+                    <div class="form-group">
+                        <label for="input-avulso-codigo">Cód. Inventado:</label>
+                        <input type="text" id="input-avulso-codigo" placeholder="Ex: COT-01">
+                    </div>
+                    <div class="form-group" style="flex: 2;">
+                        <label for="input-avulso-descricao">Descrição do Insumo Inventado:</label>
+                        <input type="text" id="input-avulso-descricao" placeholder="Ex: Locação de gerador especial 50KVA">
+                    </div>
+                    <div class="form-group">
+                        <label for="input-avulso-unidade">Unid.:</label>
+                        <input type="text" id="input-avulso-unidade" placeholder="UN, H, MES...">
+                    </div>
+                    <div class="form-group">
+                        <label for="input-avulso-preco">Preço Un. (R$):</label>
+                        <input type="number" id="input-avulso-preco" step="0.01" min="0" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label for="select-avulso-grupo">Grupo:</label>
+                        <select id="select-avulso-grupo">
+                            <option value="MATERIAL">Material</option>
+                            <option value="MÃO DE OBRA">Mão de Obra</option>
+                            <option value="EQUIPAMENTO" selected>Equipamento</option>
+                            <option value="OUTROS">Outros</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="input-avulso-coef">Coeficiente:</label>
+                        <input type="number" id="input-avulso-coef" step="0.0001" min="0" value="1.0000">
+                    </div>
+                    <button class="btn btn-success" onclick="adicionarIngredienteAvulsoInventado()">✨ Adicionar Inventado</button>
                 </div>
             </div>
         </div>
@@ -1107,9 +1229,6 @@
      LÓGICA JAVASCRIPT EM VANILLA JS (ES6+ PURO)
      ========================================================================== -->
 <script>
-    /* ==========================================================================
-       FORMATADOR MONETÁRIO OFICIAL (Intl.NumberFormat)
-       ========================================================================== */
     const currencyFormatter = new Intl.NumberFormat('pt-BR', {
         style: 'currency',
         currency: 'BRL'
@@ -1119,9 +1238,6 @@
         return currencyFormatter.format(parseFloat(valor) || 0);
     }
 
-    /* ==========================================================================
-       ESTADO GLOBAL DA APLICAÇÃO (INCLUINDO BASES ANALÍTICAS SINAPI & SCO)
-       ========================================================================== */
     const appState = {
         databases: {
             sinapi_csd: [],
@@ -1145,9 +1261,6 @@
         nextId: 1
     };
 
-    /* ==========================================================================
-       CARREGAMENTO DE DADOS & CONTORNO DE CORS
-       ========================================================================== */
     function carregarBases() {
         const dataBase = document.getElementById('select-data-base').value; 
         const estado = document.getElementById('select-estado').value; 
@@ -1204,9 +1317,6 @@
         });
     }
 
-    /* ==========================================================================
-       GERENCIAMENTO DE INTERFACE E RADIO BUTTONS
-       ========================================================================== */
     function selectSearchBaseRadio(element) {
         document.querySelectorAll('#search-base-group .radio-option').forEach(el => el.classList.remove('selected'));
         element.classList.add('selected');
@@ -1227,13 +1337,19 @@
 
         const panelManual = document.getElementById('fabrica-panel-manual');
         const panelAdaptar = document.getElementById('fabrica-panel-adaptar');
+        const panelIngredientes = document.getElementById('fabrica-panel-ingredientes-container');
+
+        panelManual.classList.add('hidden');
+        panelAdaptar.classList.add('hidden');
+        panelIngredientes.classList.add('hidden');
 
         if (modo === 'manual') {
             panelManual.classList.remove('hidden');
-            panelAdaptar.classList.add('hidden');
-        } else {
-            panelManual.classList.add('hidden');
+        } else if (modo === 'adaptar') {
             panelAdaptar.classList.remove('hidden');
+            panelIngredientes.classList.remove('hidden');
+        } else if (modo === 'mista') {
+            panelIngredientes.classList.remove('hidden');
         }
         calcularECoberturaCustoFabrica();
     }
@@ -1282,9 +1398,6 @@
         }
     }
 
-    /* ==========================================================================
-       SESSÃO 2: PESQUISA E BUSCA DE PREÇOS
-       ========================================================================== */
     function executarBusca() {
         const estadoConfig = document.getElementById('select-estado').value;
         const tabela = document.getElementById('select-tabela').value;
@@ -1402,9 +1515,6 @@
         }
     }
 
-    /* ==========================================================================
-       SESSÃO 3 & 4: ADICIONAR, EDITAR QUANTIDADE E CALCULAR ORÇAMENTO
-       ========================================================================== */
     function adicionarItemAoOrcamento() {
         const tipo = document.querySelector('input[name="tipo_lancamento"]:checked').value;
         const itemEap = document.getElementById('input-item-eap').value.trim();
@@ -1583,9 +1693,6 @@
         calcularECoberturaCustoFabrica();
     }
 
-    /* ==========================================================================
-       SESSÃO 5: FÁBRICA DE COMPOSIÇÕES PRÓPRIAS
-       ========================================================================== */
     function carregarReceitaMae() {
         const codigoMae = document.getElementById('input-sinapi-mae').value.trim();
         if (!codigoMae) {
@@ -1610,7 +1717,7 @@
                 renderizarTabelaReceitaFabrica();
                 return;
             } else {
-                alert(`A composição própria ${codigoMae} foi criada no modo "Preço Fixo" e não possui uma receita detalhada para ser adaptada.`);
+                alert(`A composição própria ${codigoMae} foi criada no modo "Preço Fixo" e não possui receita detalhada.`);
                 return;
             }
         }
@@ -1665,6 +1772,11 @@
     }
 
     function obterPrecoItemPorCodigoETipo(codigo, tipo, estadoConfig, tabela) {
+        if (tipo === 'avulso_inventado') {
+            const itemExistente = appState.fabricaRecipe.find(i => i.codigoItem === codigo);
+            return itemExistente ? itemExistente.precoUnitario : 0;
+        }
+
         const estadoEfetivo = (tipo === 'sco_composicao' || tipo === 'sco_insumo' || String(codigo).startsWith('MAT') || String(codigo).startsWith('MOD') || String(codigo).startsWith('MOI') || String(codigo).startsWith('EQ') || String(codigo).startsWith('AD ') || String(codigo).startsWith('SCO')) ? 'RJ' : estadoConfig;
 
         let baseData = [];
@@ -1738,6 +1850,38 @@
         renderizarTabelaReceitaFabrica();
     }
 
+    function adicionarIngredienteAvulsoInventado() {
+        const codigo = document.getElementById('input-avulso-codigo').value.trim() || `INV-${Date.now().toString().slice(-4)}`;
+        const descricao = document.getElementById('input-avulso-descricao').value.trim();
+        const unidade = document.getElementById('input-avulso-unidade').value.trim() || 'UN';
+        const preco = parseFloat(document.getElementById('input-avulso-preco').value) || 0;
+        const grupo = document.getElementById('select-avulso-grupo').value;
+        const coeficiente = parseFloat(document.getElementById('input-avulso-coef').value) || 1.0;
+
+        if (!descricao) {
+            alert('Por favor, informe a descrição do insumo inventado.');
+            return;
+        }
+
+        appState.fabricaRecipe.push({
+            codigoItem: codigo,
+            tipoItem: 'avulso_inventado',
+            descricao: descricao,
+            unidade: unidade,
+            coeficiente: coeficiente,
+            precoUnitario: preco,
+            grupo: grupo
+        });
+
+        document.getElementById('input-avulso-codigo').value = '';
+        document.getElementById('input-avulso-descricao').value = '';
+        document.getElementById('input-avulso-unidade').value = '';
+        document.getElementById('input-avulso-preco').value = '';
+        document.getElementById('input-avulso-coef').value = '1.0000';
+
+        renderizarTabelaReceitaFabrica();
+    }
+
     function removerIngredienteReceita(index) {
         appState.fabricaRecipe.splice(index, 1);
         renderizarTabelaReceitaFabrica();
@@ -1783,6 +1927,9 @@
             const tabela = document.getElementById('select-tabela').value;
 
             custoTotal = appState.fabricaRecipe.reduce((acc, item) => {
+                if (item.tipoItem === 'avulso_inventado') {
+                    return acc + (item.coeficiente * item.precoUnitario);
+                }
                 const precoAtual = obterPrecoItemPorCodigoETipo(item.codigoItem, item.tipoItem, estadoConfig, tabela);
                 return acc + (item.coeficiente * (precoAtual || item.precoUnitario || 0));
             }, 0);
@@ -1819,7 +1966,7 @@
             'Descrição': descricao,
             'Unidade': unidade,
             'Grupo': (modo === 'manual' ? grupoManual : 'COMPOSICAO'),
-            'ingredientes': modo === 'adaptar' ? JSON.parse(JSON.stringify(appState.fabricaRecipe)) : []
+            'ingredientes': modo !== 'manual' ? JSON.parse(JSON.stringify(appState.fabricaRecipe)) : []
         };
 
         states.forEach(st => novaComposicao[st] = precoCalculado);
@@ -1901,6 +2048,10 @@
                 if (compPropria && Array.isArray(compPropria.ingredientes) && compPropria.ingredientes.length > 0) {
                     compPropria.ingredientes.forEach(ing => {
                         const qtdTotalFilho = qtdComp * (parseFloat(ing.coeficiente) || 1.0);
+                        if (ing.tipoItem === 'avulso_inventado') {
+                            adicionarAoMap(ing.codigoItem, ing.descricao, ing.unidade, ing.grupo, qtdTotalFilho, ing.precoUnitario, 'base_propria', ing.grupo);
+                            return;
+                        }
                         const isSubComp = String(ing.tipoItem).includes('composicao') || String(ing.tipoItem) === 'sco_composicao' || String(ing.tipoItem) === 'base_propria';
                         if (isSubComp && nivel < 2) {
                             explodirComposicao(ing.codigoItem, qtdTotalFilho, ing.tipoItem, nivel + 1);
@@ -2212,9 +2363,6 @@
         document.getElementById('section-abc-orcamento').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    /* ==========================================================================
-       EXPORTAÇÕES EXCEL E CSV
-       ========================================================================== */
     function downloadArquivo(conteudo, nomeArquivo, mimeType) {
         const blob = new Blob([conteudo], { type: mimeType });
         const url = URL.createObjectURL(blob);
