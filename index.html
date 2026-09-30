@@ -608,7 +608,7 @@
 <div class="container">
     <header class="app-header">
         <div>
-            <h1><span style="font-size: 1.8rem;">📐</span> Painel de Orçamentos de Engenharia Local</h1>
+            <h1><span style="font-size: 1.8rem;">📐</span> Painel de Orçamentos - DIENGI</h1>
             <p>Sistema para Orçamentação Civil baseado nas tabelas SINAPI (Caixa), SCO (Rio de Janeiro), Base Própria & Curva ABC</p>
         </div>
         <div class="header-badge">Arquitetura SPA / JSON Local</div>
@@ -1286,6 +1286,9 @@
             
             appState.databases.sco_analitico = scoAnalitico;
             appState.databases.sinapi_analitico = sinapiAnalitico;
+
+            atualizarOrcamentoEBusca();
+
             
             console.log("Bases de dados carregadas com sucesso!");
         }).catch(erro => {
