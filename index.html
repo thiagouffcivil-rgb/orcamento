@@ -419,12 +419,11 @@
         window.orcamentoAtualId = null; 
         window.currentUser = null;
 
-        // ========================================================
-        // 🔒 LISTA DE EMAILS AUTORIZADOS (Configure a sua equipa aqui)
+// ========================================================
+        // 🔒 LISTA DE EMAILS ESPECÍFICOS AUTORIZADOS
         // ========================================================
         const emailsPermitidos = [
-            "o.seu.email.principal@gmail.com",
-            "engenharia@inca.gov.br",
+            "seu.email.pessoal@gmail.com", // Para e-mails fora do domínio INCA
             "colega@uff.br"
         ];
         // ========================================================
@@ -436,16 +435,16 @@
             const userNameDisplay = document.getElementById('user-name-display');
             
             if (user) {
-                // VERIFICAÇÃO DE SEGURANÇA: O email está na lista?
-                if (emailsPermitidos.includes(user.email)) {
+                // NOVA VERIFICAÇÃO: O e-mail está na lista OU termina em @inca.gov.br?
+                if (emailsPermitidos.includes(user.email) || user.email.endsWith("@inca.gov.br")) {
                     window.currentUser = user;
                     loginUi.style.display = 'none';
                     appUi.style.display = 'block';
                     if(userNameDisplay) userNameDisplay.innerText = user.displayName || user.email;
-                    carregarListaNuvem(); // Carrega os dados só depois de confirmar o login e a permissão
+                    carregarListaNuvem(); // Carrega os orçamentos após login confirmado
                 } else {
-                    // Email não autorizado - expulsa o utilizador
-                    alert(`Acesso negado: O e-mail "${user.email}" não tem permissão para aceder à nuvem de orçamentos da equipa.`);
+                    // E-mail não autorizado - bloqueia o acesso
+                    alert(`Acesso negado: O e-mail "${user.email}" não tem permissão para aceder à nuvem.`);
                     await signOut(auth);
                     window.currentUser = null;
                     loginUi.style.display = 'block';
