@@ -1511,7 +1511,9 @@
                     <td><span class="header-badge" style="font-size:0.7rem; background:#64748b;">${(item.grupo || item.tipoItem).toUpperCase()}</span></td>
                     <td>${item.descricao}</td>
                     <td class="text-center">${item.unidade}</td>
-                    <td class="text-right">${item.coeficiente.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}</td>
+                    <td class="text-right">
+                        <input type="number" step="0.0001" min="0" value="${item.coeficiente}" style="width: 110px; text-align: right; padding: 4px 6px;" onchange="atualizarCoeficienteIngrediente(${idx}, this.value)">
+                    </td>
                     <td class="text-right">${formatBRL(item.precoUnitario)}</td>
                     <td class="text-right"><strong>${formatBRL(totalItem)}</strong></td>
                     <td class="text-center">
@@ -1523,6 +1525,22 @@
 
         calcularECoberturaCustoFabrica();
     }
+
+    function atualizarCoeficienteIngrediente(index, novoCoef) {
+        if (appState.fabricaRecipe[index]) {
+            appState.fabricaRecipe[index].coeficiente = parseFloat(novoCoef) || 0;
+            calcularECoberturaCustoFabrica();
+            
+            // Atualiza o total da linha específica sem perder o foco do input
+            const tbody = document.getElementById('tbody-fabrica-receita');
+            if (tbody && tbody.rows[index]) {
+                const item = appState.fabricaRecipe[index];
+                const totalItem = (item.coeficiente * item.precoUnitario) || 0;
+                tbody.rows[index].cells[6].innerHTML = `<strong>${formatBRL(totalItem)}</strong>`;
+            }
+        }
+    }
+
 
     function removerIngredienteReceita(index) {
         appState.fabricaRecipe.splice(index, 1);
