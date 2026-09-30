@@ -400,8 +400,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        // A linha abaixo foi corrigida para importar o signInWithRedirect
-        import { getAuth, signInWithRedirect, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        // 1. Adicionado o getRedirectResult na importação
+        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
         const firebaseConfig = {
           apiKey: "AIzaSyC48UDggA3vBwrBDQH3uBhcPEsjGd4oUjM",
@@ -424,10 +424,20 @@
         // 🔒 LISTA DE EMAILS ESPECÍFICOS AUTORIZADOS
         // ========================================================
         const emailsPermitidos = [
-            "seu.email.pessoal@gmail.com", // Coloque o seu Gmail aqui
+            "seu.email.pessoal@gmail.com", // Substitua pelo seu
             "colega@uff.br"
         ];
         // ========================================================
+
+        // 2. CAPTURAR O RETORNO DO GOOGLE ATIVAMENTE
+        getRedirectResult(auth).then((result) => {
+            if (result) {
+                console.log("Login de redirecionamento recebido com sucesso:", result.user.email);
+            }
+        }).catch((error) => {
+            console.error("Erro no retorno do redirecionamento:", error);
+            alert("Erro ao finalizar o login: " + error.message);
+        });
 
         // Monitorizar estado de autenticação
         onAuthStateChanged(auth, async (user) => {
@@ -436,8 +446,11 @@
             const userNameDisplay = document.getElementById('user-name-display');
             
             if (user) {
+                // 3. Forçar o email para minúsculas para não falhar a verificação
+                const emailUsuario = user.email ? user.email.toLowerCase() : "";
+                
                 // VERIFICAÇÃO: O e-mail está na lista OU termina em @inca.gov.br?
-                if (emailsPermitidos.includes(user.email) || user.email.endsWith("@inca.gov.br")) {
+                if (emailsPermitidos.includes(emailUsuario) || emailUsuario.endsWith("@inca.gov.br")) {
                     window.currentUser = user;
                     loginUi.style.display = 'none';
                     appUi.style.display = 'block';
@@ -459,13 +472,14 @@
 
         window.loginComGoogle = async function() {
             try {
-                // Agora o signInWithRedirect vai funcionar perfeitamente
                 await signInWithRedirect(auth, provider);
             } catch(e) {
                 console.error("Erro ao iniciar redirecionamento:", e);
                 alert("Erro ao contactar os servidores do Google.");
             }
         };
+
+        // As restantes funções (logoutNuvem, salvarOrcamentoNaNuven, etc.) continuam iguais daqui para baixo...
 
 
         window.logoutNuvem = async function() {
