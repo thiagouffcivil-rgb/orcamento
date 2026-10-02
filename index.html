@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Orçamentos de Engenharia Local - SINAPI, SCO, Base Própria & Curva ABC</title>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <style>
         :root {
             --primary: #0d6efd;
@@ -358,6 +359,51 @@
 
         .hidden { display: none !important; }
 
+
+/* Estilos para o Menu de Abas (Nova Fase) */
+        .tab-menu {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 0;
+            overflow-x: auto;
+        }
+        .tab-btn {
+            background-color: var(--light);
+            color: var(--secondary);
+            border: 1px solid var(--border-color);
+            border-bottom: none;
+            padding: 12px 24px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+        .tab-btn:hover {
+            background-color: #e2e8f0;
+            color: var(--primary);
+        }
+        .tab-btn.active {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+
         @media print {
             body { background-color: white; padding: 0; }
             .no-print, .section-card:not(#section-orcamento):not(#section-curva-abc):not(#section-abc-orcamento), .toolbar, .actions-col {
@@ -612,6 +658,16 @@
         <div class="header-badge">Arquitetura SPA / JSON Local</div>
     </header>
 
+<!-- MENU DE NAVEGAÇÃO -->
+    <div class="tab-menu no-print">
+        <button class="tab-btn active" onclick="abrirAba(event, 'aba-orcamento')">📊 Orçamentação</button>
+        <button class="tab-btn" onclick="abrirAba(event, 'aba-fabrica')">🏭 Fábrica & Curvas ABC</button>
+        <button class="tab-btn" onclick="abrirAba(event, 'aba-cronograma')">📅 Planejamento (Gantt)</button>
+    </div>
+
+    <!-- ABA 1: ORÇAMENTAÇÃO -->
+    <div id="aba-orcamento" class="tab-content active">
+
     <section class="section-card no-print" id="section-nuvem">
         <h2 class="section-title">
             <span><span>☁️</span> Orçamentos Colaborativos na Nuvem</span>
@@ -696,7 +752,7 @@
 
             <div class="form-group">
                 <label for="input-bdi">BDI (%):</label>
-                <input type="number" id="input-bdi" value="25.00" step="0.01" min="0" oninput="atualizarOrcamentoEBusca()">
+                <input type="number" id="input-bdi" value="22.30" step="0.01" min="0" oninput="atualizarOrcamentoEBusca()">
             </div>
         </div>
     </section>
@@ -877,7 +933,7 @@
                 <strong id="summary-subtotal">R$ 0,00</strong>
             </div>
             <div class="summary-row">
-                <span>Valor do BDI (<span id="summary-bdi-perc">25.00</span>%):</span>
+                <span>Valor do BDI (<span id="summary-bdi-perc">22.30</span>%):</span>
                 <strong id="summary-bdi-valor">R$ 0,00</strong>
             </div>
             <div class="summary-row total-final">
@@ -890,13 +946,19 @@
             <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
             <button class="btn btn-success" style="background-color: #107c41;" onclick="exportarPlanilhaCompletaExcel()">📑 Exportar Caderno Completo (Excel Multi-Abas)</button>
             <button class="btn btn-secondary" onclick="exportarOrcamentoCSV()">📊 Exportar Orçamento (CSV / Excel)</button>
+            <button class="btn btn-success" onclick="exportarOrcamentoExcel()">📊 Exportar Orçamento para Excel (Formatado)</button>
             <button class="btn btn-secondary" onclick="exportarOrcamentoJSON()">📥 Exportar Orçamento (JSON)</button>
             <button class="btn btn-secondary" onclick="document.getElementById('import-file-input').click()">📤 Importar Orçamento (JSON)</button>
             <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="importarOrcamentoJSON(event)">
             <button class="btn btn-success" onclick="salvarBasePropriaJSON()">💾 Salvar Base Própria Local</button>
             <button class="btn btn-danger" style="margin-left: auto;" onclick="limparOrcamento()">🗑 Limpar Orçamento</button>
         </div>
+
     </section>
+    </div> <!-- Fim da Aba 1 -->
+
+    <!-- ABA 2: FÁBRICA E CURVAS ABC -->
+    <div id="aba-fabrica" class="tab-content">
 
     <section class="section-card no-print">
         <h2 class="section-title">
@@ -1199,6 +1261,123 @@
             </div>
         </div>
     </section>
+
+
+<!-- FÁBRICA DE COMPOSIÇÕES E PRAZOS -->
+    <section class="section-card" style="background-color: #f8fafc; border-left: 4px solid var(--primary);">
+        <h2 class="section-title">
+            <span>🏭 Fábrica de Composições & Produtividade (IA)</span>
+            <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Gere prompts inteligentes e alimente o seu banco de dados técnico</span>
+        </h2>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <!-- Coluna 1: Gerador de Prompt -->
+            <div>
+                <label style="font-weight: bold; font-size: 0.9rem; margin-bottom: 5px; display: block;">1. Selecionar Serviço do Orçamento</label>
+                <select id="fabrica-select-item" class="form-control" style="margin-bottom: 10px;" onchange="prepararPromptFabrica()">
+                    <option value="">-- Escolha um item do orçamento --</option>
+                </select>
+
+                <label style="font-weight: bold; font-size: 0.9rem; margin-bottom: 5px; display: block;">2. Copie o Prompt gerado para a IA</label>
+                <textarea id="fabrica-prompt-gerado" class="form-control" rows="5" readonly style="font-family: monospace; font-size: 0.8rem; background: #fff; margin-bottom: 10px;" placeholder="O prompt aparecerá aqui automaticamente ao selecionar o serviço..."></textarea>
+                <button class="btn btn-secondary btn-sm" onclick="copiarPromptFabrica()">📋 Copiar Prompt para a Área de Transferência</button>
+            </div>
+
+            <!-- Coluna 2: Injetor de JSON da IA -->
+            <div>
+                <label style="font-weight: bold; font-size: 0.9rem; margin-bottom: 5px; display: block;">3. Cole o JSON retornado pela IA</label>
+                <textarea id="fabrica-json-entrada" class="form-control" rows="5" style="font-family: monospace; font-size: 0.8rem; background: #fff; margin-bottom: 10px;" placeholder='Cole aqui o JSON exato fornecido pela IA (ex: {"codigo": "...", "turma": "...", "producaoDiaria": 20, "espera": 14})'></textarea>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="salvarComposicaoFabrica()">💾 Salvar na Base Local/Nuven</button>
+                    <button class="btn btn-outline" onclick="exportarBaseComposicoes()">📥 Exportar Base Completa</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+</div> <!-- Fim da Aba 2 -->
+
+    <!-- ABA 3: CRONOGRAMA -->
+    <!-- ABA 3: CRONOGRAMA -->
+    <div id="aba-cronograma" class="tab-content">
+        <section class="section-card">
+            <h2 class="section-title">
+                <span><span class="section-number">8</span> Cronograma Físico e Gráfico de Gantt</span>
+                <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Sequenciamento, dimensionamento de equipas e esperas técnicas (Lag)</span>
+            </h2>
+
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="carregarTabelaCronograma()">🔄 1. Carregar Serviços</button>
+                <button class="btn btn-success" onclick="gerarGraficoGantt()">📈 2. Desenhar Gantt</button>
+                <button class="btn btn-secondary" onclick="exportarCronogramaJSON()">📤 Exportar Ligações (JSON)</button>
+                <button class="btn btn-secondary" onclick="document.getElementById('import-crono-input').click()">📥 Importar Ligações (JSON)</button>
+                <input type="file" id="import-crono-input" accept=".json" class="hidden" onchange="importarCronogramaJSON(event)">
+                <button class="btn btn-info" style="color: white; font-weight: bold;" onclick="calcularHHDosIngredientes()">⚙️ 5. Puxar HH das Composições</button>
+                <button class="btn btn-warning" style="color: black;" onclick="alert('Funcionalidade de IA (DeepSeek / Gemini) para autopreenchimento das esperas técnicas em desenvolvimento!')">🤖 3. Sugerir Esperas com IA</button>
+            </div>
+
+<!-- FÁBRICA DE PRAZOS -->
+            <div class="section-card" style="background-color: #f0fdf4; border-color: #bbf7d0; margin-bottom: 20px;">
+                <h3 style="margin-top: 0; color: #166534; display: flex; justify-content: space-between; align-items: center;">
+                    <span>⏱️ Fábrica de Prazos (Banco Local de Produtividade)</span>
+                    <div>
+                        <button class="btn btn-sm btn-outline" onclick="exportarBancoPrazos()">💾 Exportar Banco</button>
+                        <button class="btn btn-sm btn-outline" onclick="document.getElementById('import-banco-prazos').click()">📂 Importar Banco</button>
+                        <input type="file" id="import-banco-prazos" accept=".json" class="hidden" onchange="importarBancoPrazos(event)">
+                    </div>
+                </h3>
+                <p style="font-size: 0.9rem; color: #15803d; margin-bottom: 15px;">Associe a produção diária de uma turma padrão a cada serviço. O sistema calculará a duração automaticamente.</p>
+                
+                <div style="display: grid; grid-template-columns: 3fr 2fr 1fr 1fr 1fr; gap: 10px; align-items: end; margin-bottom: 15px;">
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold;">1. Selecionar Serviço do Orçamento</label>
+                        <select id="select-servico-prazo" class="form-control" onchange="carregarDadosServicoPrazo()">
+                            <option value="">-- Escolha um serviço --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold;">2. Turma Padrão (Ex: 1 PED + 1 SER)</label>
+                        <input type="text" id="input-turma-prazo" class="form-control" placeholder="Descrição da equipe">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold;">3. Produção/Dia</label>
+                        <input type="number" id="input-prod-prazo" class="form-control" placeholder="Qtd">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.8rem; font-weight: bold;">4. Espera (Dias)</label>
+                        <input type="number" id="input-espera-prazo" class="form-control" placeholder="Cura">
+                    </div>
+                    <button class="btn btn-success" onclick="salvarNoBancoPrazos()">Registrar</button>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="margin-bottom: 25px; max-height: 400px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">EAP</th>
+                            <th>Descrição do Serviço</th>
+                            <th style="width: 100px;" class="text-right">Mão de Obra (HH)</th>
+                            <th style="width: 110px;" class="text-center">Equipa (Qtd)</th>
+                            <th style="width: 100px;" class="text-center">Duração (Dias)</th>
+                            <th style="width: 120px;" class="text-center">Predecessora (EAP)</th>
+                            <th style="width: 110px;" class="text-center">Espera Técnica (Dias)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-cronograma">
+                        <tr><td colspan="7" class="text-center" style="padding: 20px; color: var(--text-muted);">Clique em "Carregar Serviços do Orçamento" para iniciar o planeamento.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Área onde o Gráfico será injetado -->
+            <div id="gantt_chart_div" style="width: 100%; min-height: 200px; overflow-x: auto; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
+                <div style="text-align: center; color: #94a3b8; padding-top: 80px;">O gráfico de barras aparecerá aqui.</div>
+            </div>
+        </section>
+    </div> <!-- Fim da Aba 3 -->
+
 </div>
 
 <script>
@@ -1211,6 +1390,20 @@
         return currencyFormatter.format(parseFloat(valor) || 0);
     }
 
+    window.abrirAba = function(evt, nomeAba) {
+        const conteudos = document.getElementsByClassName("tab-content");
+        for (let i = 0; i < conteudos.length; i++) {
+            conteudos[i].classList.remove("active");
+        }
+        const botoes = document.getElementsByClassName("tab-btn");
+        for (let i = 0; i < botoes.length; i++) {
+            botoes[i].classList.remove("active");
+        }
+        document.getElementById(nomeAba).classList.add("active");
+        if(evt) evt.currentTarget.classList.add("active");
+    };
+
+
     const appState = {
         databases: {
             sinapi_csd: [], sinapi_ccd: [], sinapi_isd: [], sinapi_icd: [], sinapi_analitico: [],
@@ -1219,6 +1412,11 @@
         },
         searchResult: [], fabricaRecipe: [], cachedMaoDeObra: [], cachedMateriaisABC: [],
         cachedServicosABC: [], orcamento: [], nextId: 1
+    };
+
+    // Função universal de arredondamento financeiro (2 casas decimais exatas)
+    window.arredondarMoeda = function(valor) {
+        return Math.round((parseFloat(valor) || 0) * 100) / 100;
     };
 
     function carregarBases() {
@@ -1783,7 +1981,7 @@
             if (item.tipo === 'etapa') return `<tr class="row-etapa"><td>${item.itemEap}</td><td><span class="header-badge" style="background:#475569;">Etapa</span></td><td>-</td><td colspan="6"><strong>${item.descricao}</strong></td><td class="text-center actions-col"><button class="btn btn-sm btn-outline" onclick="moverItem(${index}, 'cima')">⬆️</button> <button class="btn btn-sm btn-outline" onclick="moverItem(${index}, 'baixo')">⬇️</button> <button class="btn btn-sm btn-danger" onclick="removerItemOrcamento(${item.id})">❌</button></td></tr>`;
 
             const precoUnitarioAtual = obterPrecoAtualizadoDoItem(item, estado, tabela);
-            const precoComBdi = precoUnitarioAtual * (1 + bdi / 100); const totalLinha = precoComBdi * item.qtd;
+            const precoComBdi = arredondarMoeda(precoUnitarioAtual * (1 + bdi / 100)); const totalLinha = precoComBdi * item.qtd;
             subtotalAcumulado += precoUnitarioAtual * item.qtd;
 
             let badgeCor = 'var(--primary)'; let tipoLabel = 'Comp. SINAPI';
@@ -2069,11 +2267,997 @@
         linhas.forEach(linha => { const linhaFormatada = linha.map(campo => { if (campo === null || campo === undefined) return '""'; return `"${String(campo).replace(/"/g, '""')}"`; }); csvContent += linhaFormatada.join(';') + '\n'; });
         downloadArquivo(csvContent, `${nomeArquivo}_${new Date().toISOString().slice(0,10)}.csv`, 'text/csv;charset=utf-8;');
     }
-    function exportarOrcamentoCSV() { /* Omitido por questões de espaço mas idêntico à versão 4 */ }
-    function exportarMaoDeObraCSV() { /* Omitido */ }
-    function exportarCurvaABCMateriaisCSV() { /* Omitido */ }
-    function exportarCurvaABCServicosCSV() { /* Omitido */ }
-    function exportarPlanilhaCompletaExcel() { /* Omitido, usa a mesma da versão 4 */ }
+
+
+window.exportarOrcamentoExcel = function() {
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            alert('Não há itens no orçamento para exportar.');
+            return;
+        }
+
+        const estado = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+        const bdi = parseFloat(document.getElementById('input-bdi').value) || 0;
+
+        // Estrutura HTML com estilos corporativos para o Excel
+        let htmlTable = `
+            <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    table { border-collapse: collapse; width: 100%; font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; }
+                    th { background-color: #1e3a8a; color: #ffffff; font-weight: bold; border: 1px solid #1e293b; text-align: center; padding: 10px; }
+                    td { border: 1px solid #cbd5e1; padding: 8px; vertical-align: middle; }
+                    .etapa { background-color: #f1f5f9; font-weight: bold; color: #0f172a; font-size: 11.5pt; }
+                    .text-center { text-align: center; }
+                    .text-right { text-align: right; }
+                    .font-bold { font-weight: bold; }
+                </style>
+            </head>
+            <body>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item EAP</th>
+                            <th>Tipo</th>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Unidade</th>
+                            <th>Quantidade</th>
+                            <th>Preço Unitário (R$)</th>
+                            <th>Preço c/ BDI (R$)</th>
+                            <th>Total (R$)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        let custoTotalGeral = 0;
+
+        appState.orcamento.forEach(item => {
+            if (item.tipo === 'etapa') {
+                htmlTable += `
+                    <tr class="etapa">
+                        <td>${item.itemEap}</td>
+                        <td>ETAPA</td>
+                        <td></td>
+                        <td colspan="6">${item.descricao}</td>
+                    </tr>
+                `;
+            } else {
+                // Aplica o arredondamento financeiro oficial para evitar frações de centavo
+                const precoUn = arredondarMoeda(obterPrecoAtualizadoDoItem(item, estado, tabela));
+                const precoComBdi = arredondarMoeda(precoUn * (1 + bdi / 100));
+                const total = arredondarMoeda(precoComBdi * item.qtd);
+                custoTotalGeral += total;
+
+                htmlTable += `
+                    <tr>
+                        <td class="text-center font-bold">${item.itemEap}</td>
+                        <td class="text-center">${item.tipo.toUpperCase()}</td>
+                        <td class="text-center">${item.codigo}</td>
+                        <td>${item.descricao}</td>
+                        <td class="text-center">${item.unidade}</td>
+                        <td class="text-right">${item.qtd.toFixed(3).replace('.', ',')}</td>
+                        <td class="text-right">${precoUn.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td class="text-right">${precoComBdi.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td class="text-right font-bold">${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                `;
+            }
+        });
+
+        htmlTable += `
+                    </tbody>
+                </table>
+            </body>
+            </html>
+        `;
+
+        // Dispara o download do ficheiro formatado
+        const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Orcamento_Obra_${estado}_${tabela}.xls`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+
+     function exportarOrcamentoCSV() {
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            alert('Não há itens no orçamento para exportar.');
+            return;
+        }
+
+        const estado = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+        const bdi = parseFloat(document.getElementById('input-bdi').value) || 0;
+
+        const cabecalhos = ['Item EAP', 'Tipo', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Preço Unitário (R$)', 'Preço c/ BDI (R$)', 'Total (R$)'];
+        const linhas = appState.orcamento.map(item => {
+            if (item.tipo === 'etapa') {
+                return [item.itemEap, 'ETAPA', '', item.descricao, '', '', '', '', ''];
+            }
+            const precoUn = obterPrecoAtualizadoDoItem(item, estado, tabela);
+            const precoComBdi = precoUn * (1 + bdi / 100);
+            const total = precoComBdi * item.qtd;
+
+            return [
+                item.itemEap,
+                item.tipo.toUpperCase(),
+                item.codigo,
+                item.descricao,
+                item.unidade,
+                item.qtd.toFixed(3).replace('.', ','),
+                precoUn.toFixed(2).replace('.', ','),
+                precoComBdi.toFixed(2).replace('.', ','),
+                total.toFixed(2).replace('.', ',')
+            ];
+        });
+
+        exportarTabelaCSV('Orcamento_Obra', cabecalhos, linhas);
+    }
+
+    function exportarMaoDeObraCSV() {
+        if (!appState.cachedMaoDeObra || appState.cachedMaoDeObra.length === 0) gerarLevantamentoCurvaABC();
+        if (!appState.cachedMaoDeObra || appState.cachedMaoDeObra.length === 0) {
+            alert('Nenhum dado de mão de obra disponível.');
+            return;
+        }
+
+        const cabecalhos = ['Código', 'Descrição / Função', 'Unidade', 'Quantidade Total', 'Preço Unitário (R$)', 'Custo Total (R$)'];
+        const linhas = appState.cachedMaoDeObra.map(item => [
+            item.codigo,
+            item.descricao,
+            item.unidade,
+            item.qtdTotal.toFixed(2).replace('.', ','),
+            item.precoUnitario.toFixed(2).replace('.', ','),
+            item.custoTotal.toFixed(2).replace('.', ',')
+        ]);
+
+        exportarTabelaCSV('Levantamento_Mao_de_Obra', cabecalhos, linhas);
+    }
+
+    function exportarCurvaABCMateriaisCSV() {
+        if (!appState.cachedMateriaisABC || appState.cachedMateriaisABC.length === 0) gerarLevantamentoCurvaABC();
+        if (!appState.cachedMateriaisABC || appState.cachedMateriaisABC.length === 0) {
+            alert('Nenhum dado de materiais disponível na Curva ABC.');
+            return;
+        }
+
+        const cabecalhos = ['Classe', 'Código', 'Descrição do Material / Insumo', 'Unidade', 'Quantidade Total', 'Preço Unitário (R$)', 'Custo Total (R$)', '% Total', '% Acumulada'];
+        const linhas = appState.cachedMateriaisABC.map(item => [
+            item.classeABC || '',
+            item.codigo,
+            item.descricao,
+            item.unidade,
+            item.qtdTotal.toFixed(3).replace('.', ','),
+            item.precoUnitario.toFixed(2).replace('.', ','),
+            item.custoTotal.toFixed(2).replace('.', ','),
+            (item.percTotal || 0).toFixed(2).replace('.', ',') + '%',
+            (item.percAcum || 0).toFixed(2).replace('.', ',') + '%'
+        ]);
+
+        exportarTabelaCSV('Curva_ABC_Materiais_Equipamentos', cabecalhos, linhas);
+    }
+
+    function exportarCurvaABCServicosCSV() {
+        if (!appState.cachedServicosABC || appState.cachedServicosABC.length === 0) gerarCurvaABCOrcamento();
+        if (!appState.cachedServicosABC || appState.cachedServicosABC.length === 0) {
+            alert('Nenhum dado disponível na Curva ABC de Serviços.');
+            return;
+        }
+
+        const cabecalhos = ['Classe', 'Item EAP', 'Código', 'Descrição do Serviço', 'Unidade', 'Quantidade', 'Preço c/ BDI (R$)', 'Custo Total (R$)', '% Total', '% Acumulada'];
+        const linhas = appState.cachedServicosABC.map(item => [
+            item.classeABC || '',
+            item.itemEap,
+            item.codigo,
+            item.descricao,
+            item.unidade,
+            item.qtd.toFixed(3).replace('.', ','),
+            item.precoComBdi.toFixed(2).replace('.', ','),
+            item.custoTotal.toFixed(2).replace('.', ','),
+            (item.percTotal || 0).toFixed(2).replace('.', ',') + '%',
+            (item.percAcum || 0).toFixed(2).replace('.', ',') + '%'
+        ]);
+
+        exportarTabelaCSV('Curva_ABC_Servicos_Orcamento', cabecalhos, linhas);
+    }
+
+    function exportarPlanilhaCompletaExcel() {
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            alert('Adicione itens ao orçamento antes de exportar o caderno completo.');
+            return;
+        }
+
+        gerarLevantamentoCurvaABC();
+        gerarCurvaABCOrcamento();
+
+        const estado = document.getElementById('select-estado').value;
+        const tabela = document.getElementById('select-tabela').value;
+        const bdi = parseFloat(document.getElementById('input-bdi').value) || 0;
+
+        function escapeXml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function createCell(data, type = 'String', style = '') {
+            const styleAttr = style ? ` ss:StyleID="${style}"` : '';
+            return `<Cell${styleAttr}><Data ss:Type="${type}">${escapeXml(data)}</Data></Cell>`;
+        }
+
+        let orcamentoRows = `
+            <Row ss:StyleID="HeaderStyle">
+                ${createCell('Item EAP')}
+                ${createCell('Tipo')}
+                ${createCell('Código')}
+                ${createCell('Descrição')}
+                ${createCell('Unidade')}
+                ${createCell('Quantidade')}
+                ${createCell('Preço Unitário (R$)')}
+                ${createCell('Preço c/ BDI (R$)')}
+                ${createCell('Total (R$)')}
+            </Row>
+        `;
+
+        let subtotalOrc = 0;
+        appState.orcamento.forEach(item => {
+            if (item.tipo === 'etapa') {
+                orcamentoRows += `
+                    <Row ss:StyleID="EtapaStyle">
+                        ${createCell(item.itemEap)}
+                        ${createCell('ETAPA')}
+                        ${createCell('-')}
+                        ${createCell(item.descricao)}
+                        ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                    </Row>
+                `;
+            } else {
+                const precoUn = obterPrecoAtualizadoDoItem(item, estado, tabela);
+                const precoComBdi = precoUn * (1 + bdi / 100);
+                const totalLinha = precoComBdi * item.qtd;
+                subtotalOrc += precoUn * item.qtd;
+
+                orcamentoRows += `
+                    <Row>
+                        ${createCell(item.itemEap)}
+                        ${createCell(item.tipo.toUpperCase())}
+                        ${createCell(item.codigo)}
+                        ${createCell(item.descricao)}
+                        ${createCell(item.unidade, 'String', 'CenterStyle')}
+                        ${createCell(item.qtd, 'Number', 'Number3Dec')}
+                        ${createCell(precoUn, 'Number', 'CurrencyStyle')}
+                        ${createCell(precoComBdi, 'Number', 'CurrencyStyle')}
+                        ${createCell(totalLinha, 'Number', 'CurrencyBoldStyle')}
+                    </Row>
+                `;
+            }
+        });
+
+        const valorBdiOrc = subtotalOrc * (bdi / 100);
+        const totalGeralOrc = subtotalOrc + valorBdiOrc;
+
+        orcamentoRows += `
+            <Row></Row>
+            <Row ss:StyleID="TotalFooterStyle">
+                ${createCell('SUBTOTAL (SEM BDI):')}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(subtotalOrc, 'Number', 'CurrencyBoldStyle')}
+            </Row>
+            <Row ss:StyleID="TotalFooterStyle">
+                ${createCell(`VALOR DO BDI (${bdi.toFixed(2)}%):`)}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(valorBdiOrc, 'Number', 'CurrencyBoldStyle')}
+            </Row>
+            <Row ss:StyleID="GrandTotalStyle">
+                ${createCell('TOTAL GERAL DO ORÇAMENTO:')}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(totalGeralOrc, 'Number', 'CurrencyGrandTotalStyle')}
+            </Row>
+        `;
+
+        let moRows = `
+            <Row ss:StyleID="HeaderStyle">
+                ${createCell('Código')}
+                ${createCell('Descrição / Função')}
+                ${createCell('Unidade')}
+                ${createCell('Quantidade Total (HH)')}
+                ${createCell('Preço Unitário (R$)')}
+                ${createCell('Custo Total (R$)')}
+            </Row>
+        `;
+        let totalMoCusto = 0;
+        let totalMoHoras = 0;
+        (appState.cachedMaoDeObra || []).forEach(item => {
+            totalMoCusto += (item.custoTotal || 0);
+            totalMoHoras += (item.qtdTotal || 0);
+            moRows += `
+                <Row>
+                    ${createCell(item.codigo)}
+                    ${createCell(item.descricao)}
+                    ${createCell(item.unidade, 'String', 'CenterStyle')}
+                    ${createCell(item.qtdTotal, 'Number', 'Number2Dec')}
+                    ${createCell(item.precoUnitario, 'Number', 'CurrencyStyle')}
+                    ${createCell(item.custoTotal, 'Number', 'CurrencyBoldStyle')}
+                </Row>
+            `;
+        });
+        moRows += `
+            <Row></Row>
+            <Row ss:StyleID="GrandTotalStyle">
+                ${createCell('TOTAL DE MÃO DE OBRA:')}
+                ${createCell('')}
+                ${createCell('H', 'String', 'CenterStyle')}
+                ${createCell(totalMoHoras, 'Number', 'Number2DecBold')}
+                ${createCell('')}
+                ${createCell(totalMoCusto, 'Number', 'CurrencyGrandTotalStyle')}
+            </Row>
+        `;
+
+        let matRows = `
+            <Row ss:StyleID="HeaderStyle">
+                ${createCell('Classe')}
+                ${createCell('Código')}
+                ${createCell('Descrição do Material / Insumo')}
+                ${createCell('Unidade')}
+                ${createCell('Quantidade Total')}
+                ${createCell('Preço Unitário (R$)')}
+                ${createCell('Custo Total (R$)')}
+                ${createCell('% Total')}
+                ${createCell('% Acumulada')}
+            </Row>
+        `;
+        let totalMatCusto = 0;
+        (appState.cachedMateriaisABC || []).forEach(item => {
+            totalMatCusto += (item.custoTotal || 0);
+            matRows += `
+                <Row>
+                    ${createCell(item.classeABC || 'A', 'String', 'CenterStyle')}
+                    ${createCell(item.codigo)}
+                    ${createCell(item.descricao)}
+                    ${createCell(item.unidade, 'String', 'CenterStyle')}
+                    ${createCell(item.qtdTotal, 'Number', 'Number3Dec')}
+                    ${createCell(item.precoUnitario, 'Number', 'CurrencyStyle')}
+                    ${createCell(item.custoTotal, 'Number', 'CurrencyBoldStyle')}
+                    ${createCell((item.percTotal || 0) / 100, 'Number', 'PercentStyle')}
+                    ${createCell((item.percAcum || 0) / 100, 'Number', 'PercentStyle')}
+                </Row>
+            `;
+        });
+        matRows += `
+            <Row></Row>
+            <Row ss:StyleID="GrandTotalStyle">
+                ${createCell('TOTAL DE MATERIAIS:')}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(totalMatCusto, 'Number', 'CurrencyGrandTotalStyle')}
+                ${createCell(1.00, 'Number', 'PercentStyle')}
+                ${createCell(1.00, 'Number', 'PercentStyle')}
+            </Row>
+        `;
+
+        let servRows = `
+            <Row ss:StyleID="HeaderStyle">
+                ${createCell('Classe')}
+                ${createCell('Item EAP')}
+                ${createCell('Código')}
+                ${createCell('Descrição do Serviço')}
+                ${createCell('Unidade')}
+                ${createCell('Quantidade')}
+                ${createCell('Preço c/ BDI (R$)')}
+                ${createCell('Custo Total (R$)')}
+                ${createCell('% Total')}
+                ${createCell('% Acumulada')}
+            </Row>
+        `;
+        let totalServCusto = 0;
+        (appState.cachedServicosABC || []).forEach(item => {
+            totalServCusto += (item.custoTotal || 0);
+            servRows += `
+                <Row>
+                    ${createCell(item.classeABC || 'A', 'String', 'CenterStyle')}
+                    ${createCell(item.itemEap)}
+                    ${createCell(item.codigo)}
+                    ${createCell(item.descricao)}
+                    ${createCell(item.unidade, 'String', 'CenterStyle')}
+                    ${createCell(item.qtd, 'Number', 'Number3Dec')}
+                    ${createCell(item.precoComBdi, 'Number', 'CurrencyStyle')}
+                    ${createCell(item.custoTotal, 'Number', 'CurrencyBoldStyle')}
+                    ${createCell((item.percTotal || 0) / 100, 'Number', 'PercentStyle')}
+                    ${createCell((item.percAcum || 0) / 100, 'Number', 'PercentStyle')}
+                </Row>
+            `;
+        });
+        servRows += `
+            <Row></Row>
+            <Row ss:StyleID="GrandTotalStyle">
+                ${createCell('TOTAL GERAL DOS SERVIÇOS:')}
+                ${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}${createCell('')}
+                ${createCell(totalServCusto, 'Number', 'CurrencyGrandTotalStyle')}
+                ${createCell(1.00, 'Number', 'PercentStyle')}
+                ${createCell(1.00, 'Number', 'PercentStyle')}
+            </Row>
+        `;
+
+        const workbookXml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:html="http://www.w3.org/TR/REC-html40">
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="10"/></Style>
+  <Style ss:ID="HeaderStyle"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/><Interior ss:Color="#1E3C72" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="EtapaStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Color="#0F172A" ss:Bold="1"/><Interior ss:Color="#CBD5E1" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="CenterStyle"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/></Style>
+  <Style ss:ID="Number2Dec"><NumberFormat ss:Format="#,##0.00"/></Style>
+  <Style ss:ID="Number2DecBold"><Font ss:FontName="Calibri" ss:Bold="1"/><NumberFormat ss:Format="#,##0.00"/></Style>
+  <Style ss:ID="Number3Dec"><NumberFormat ss:Format="#,##0.000"/></Style>
+  <Style ss:ID="CurrencyStyle"><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
+  <Style ss:ID="CurrencyBoldStyle"><Font ss:FontName="Calibri" ss:Bold="1"/><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
+  <Style ss:ID="PercentStyle"><NumberFormat ss:Format="0.00%"/></Style>
+  <Style ss:ID="TotalFooterStyle"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#334155"/><Interior ss:Color="#F1F5F9" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="GrandTotalStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1E293B"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="CurrencyGrandTotalStyle"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#0D6EFD"/><Interior ss:Color="#E2E8F0" ss:Pattern="Solid"/><NumberFormat ss:Format="&quot;R$&quot;\ #,##0.00"/></Style>
+ </Styles>
+ <Worksheet ss:Name="Orçamento Analítico"><Table>${orcamentoRows}</Table></Worksheet>
+ <Worksheet ss:Name="Mão de Obra (HH)"><Table>${moRows}</Table></Worksheet>
+ <Worksheet ss:Name="Curva ABC Materiais"><Table>${matRows}</Table></Worksheet>
+ <Worksheet ss:Name="Curva ABC Serviços"><Table>${servRows}</Table></Worksheet>
+</Workbook>`;
+
+        downloadArquivo(workbookXml, `Caderno_Orcamento_Planejamento_${new Date().toISOString().slice(0,10)}.xls`, 'application/vnd.ms-excel;charset=utf-8;');
+    }
+
+
+    // ==========================================
+    // MÓDULO DE CRONOGRAMA E GANTT
+    // ==========================================
+    window.carregarTabelaCronograma = function() {
+        const tbody = document.getElementById('tbody-cronograma');
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: var(--danger);">O orçamento está vazio. Adicione itens primeiro.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = appState.orcamento.map((item) => {
+            if (item.tipo === 'etapa') {
+                return `<tr class="row-etapa"><td>${item.itemEap}</td><td colspan="6"><strong>${item.descricao}</strong></td></tr>`;
+            }
+
+            // Inicia objeto cronograma se não existir
+            if (!item.cronograma) item.cronograma = { hh: 0, equipe: 1, predecessora: '', espera: 0 };
+            
+            // Fórmula: HH / (Tamanho Equipa * 8 horas/dia)
+            let duracao = item.cronograma.hh > 0 ? Math.ceil(item.cronograma.hh / (item.cronograma.equipe * 8)) : 1;
+
+            return `
+                <tr>
+                    <td><strong>${item.itemEap}</strong></td>
+                    <td style="font-size: 0.85rem;">${item.descricao}</td>
+                    <td class="text-right">
+                        <input type="number" min="0" value="${item.cronograma.hh}" style="width: 80px; text-align: right; padding: 4px;" onchange="atualizarCrono(${item.id}, 'hh', this.value)">
+                    </td>
+                    <td class="text-center">
+                        <input type="number" min="1" value="${item.cronograma.equipe}" style="width: 60px; text-align: center; padding: 4px;" onchange="atualizarCrono(${item.id}, 'equipe', this.value)">
+                    </td>
+                    <td class="text-center"><strong id="duracao-${item.id}" style="color: var(--primary); font-size: 1.1rem;">${duracao}</strong></td>
+                    <td class="text-center">
+                        <input type="text" placeholder="Ex: 1.1" value="${item.cronograma.predecessora}" style="width: 70px; text-align: center; padding: 4px;" onchange="atualizarCrono(${item.id}, 'predecessora', this.value)">
+                    </td>
+                    <td class="text-center">
+                        <input type="number" min="0" value="${item.cronograma.espera}" style="width: 60px; text-align: center; padding: 4px;" onchange="atualizarCrono(${item.id}, 'espera', this.value)">
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    };
+
+    window.atualizarCrono = function(id, campo, valor) {
+        const item = appState.orcamento.find(i => i.id === id);
+        if (item) {
+            item.cronograma[campo] = (campo === 'predecessora') ? valor.trim() : (parseFloat(valor) || 0);
+            
+            if (campo === 'equipe' && item.cronograma.equipe < 1) item.cronograma.equipe = 1;
+
+            if (campo === 'hh' || campo === 'equipe') {
+                const duracao = item.cronograma.hh > 0 ? Math.ceil(item.cronograma.hh / (item.cronograma.equipe * 8)) : 1;
+                document.getElementById(`duracao-${id}`).innerText = duracao;
+            }
+        }
+    };
+
+window.gerarGraficoGantt = function() {
+        if (!appState.orcamento || appState.orcamento.length === 0) return;
+        
+        // Carrega o Google Charts
+        google.charts.load('current', {'packages':['gantt']});
+        google.charts.setOnLoadCallback(desenharGrafico);
+
+        // FUNÇÃO AUXILIAR: Garante que a data cai num dia útil (avança fins de semana)
+        function proximoDiaUtil(data) {
+            let d = new Date(data.getTime());
+            if (d.getDay() === 6) d.setDate(d.getDate() + 2); // Sábado avança para Segunda
+            if (d.getDay() === 0) d.setDate(d.getDate() + 1); // Domingo avança para Segunda
+            return d;
+        }
+
+        function desenharGrafico() {
+            var data = new google.visualization.DataTable();
+            data.addColumn('string', 'Task ID');
+            data.addColumn('string', 'Task Name');
+            data.addColumn('string', 'Resource');
+            data.addColumn('date', 'Start Date');
+            data.addColumn('date', 'End Date');
+            data.addColumn('number', 'Duration');
+            data.addColumn('number', 'Percent Complete');
+            data.addColumn('string', 'Dependencies');
+
+            let rows = [];
+            
+            // 1. Prepara as Tarefas
+            let tarefasValidas = appState.orcamento.filter(i => i.tipo !== 'etapa');
+            let mapTarefas = {};
+            
+            let arrayCalculo = tarefasValidas.map(i => {
+                let duracaoDias = (i.cronograma && i.cronograma.hh > 0) ? Math.ceil(i.cronograma.hh / (i.cronograma.equipe * 8)) : 1;
+                let obj = {
+                    id: String(i.id), eap: i.itemEap, desc: i.descricao, 
+                    duracaoDias: duracaoDias, predEap: i.cronograma ? i.cronograma.predecessora : '',
+                    esperaDias: i.cronograma ? i.cronograma.espera : 0, start: null, end: null
+                };
+                mapTarefas[i.itemEap] = obj;
+                return obj;
+            });
+
+            // Motor de Caminho Crítico 
+            let baseDate = new Date(); // Inicia o projeto hoje
+            baseDate.setHours(0,0,0,0);
+            
+            let mudou = true; let loops = 0;
+            while(mudou && loops < 100) { 
+                mudou = false; loops++;
+                arrayCalculo.forEach(t => {
+                    let prevStart = t.start;
+                    
+                    // A) CÁLCULO DA DATA DE INÍCIO COM MÚLTIPLAS PREDECESSORAS
+                    let preds = t.predEap ? String(t.predEap).split(/[,;]+/).map(s => s.trim()).filter(Boolean) : [];
+
+                    if (preds.length === 0) {
+                        // Sem predecessora, arranca no próximo dia útil a partir de hoje
+                        t.start = proximoDiaUtil(new Date(baseDate.getTime())); 
+                    } else {
+                        let maxEndDate = new Date(baseDate.getTime());
+                        let encontrouValida = false;
+
+                        // Analisa TODAS as predecessoras fornecidas
+                        preds.forEach(p => {
+                            if (mapTarefas[p] && mapTarefas[p].end) {
+                                if (mapTarefas[p].end.getTime() > maxEndDate.getTime()) {
+                                    maxEndDate = new Date(mapTarefas[p].end.getTime());
+                                }
+                                encontrouValida = true;
+                            }
+                        });
+
+                        if (encontrouValida) {
+                            let dataComEspera = new Date(maxEndDate.getTime());
+                            // Adiciona a espera técnica à predecessora que terminar mais tarde
+                            dataComEspera.setDate(dataComEspera.getDate() + t.esperaDias);
+                            t.start = proximoDiaUtil(dataComEspera);
+                        } else {
+                            // Se preencheu errado e não achou a predecessora, arranca hoje
+                            t.start = proximoDiaUtil(new Date(baseDate.getTime()));
+                        }
+                    }
+                    
+                    // B) CÁLCULO DA DATA DE FIM (Apenas Dias Úteis)
+                    if (t.start) {
+                        let dataFim = new Date(t.start.getTime());
+                        let diasUteisAdicionados = 0;
+                        
+                        while(diasUteisAdicionados < t.duracaoDias) {
+                            dataFim.setDate(dataFim.getDate() + 1);
+                            // Ignora Sábado (6) e Domingo (0) no consumo de dias da tarefa
+                            if (dataFim.getDay() !== 0 && dataFim.getDay() !== 6) {
+                                diasUteisAdicionados++;
+                            }
+                        }
+                        t.end = dataFim;
+                    }
+                    
+                    // C) VERIFICAÇÃO DE MUDANÇA EM CASCATA
+                    if (!prevStart || prevStart.getTime() !== t.start.getTime()) mudou = true;
+                });
+            }
+
+            // 2. Transfere os dados ajustados para o Google Charts
+            arrayCalculo.forEach(t => {
+                rows.push([
+                    t.id, 
+                    `${t.eap} - ${t.desc.substring(0, 35)}...`, 
+                    'Serviços', 
+                    t.start, 
+                    t.end, 
+                    null, // Duração calculada via datas absolutas
+                    0, 
+                    null // Dependências visuais desligadas para o cálculo de esperas e dias úteis funcionar livremente
+                ]);
+            });
+
+            data.addRows(rows);
+
+            var options = {
+                height: (rows.length * 42) + 50,
+                gantt: { trackHeight: 30, labelStyle: { fontName: 'system-ui', fontSize: 12 } }
+            };
+
+            var chart = new google.visualization.Gantt(document.getElementById('gantt_chart_div'));
+            chart.draw(data, options);
+        }
+    };
+
+window.exportarCronogramaJSON = function() {
+        if (!appState.orcamento || appState.orcamento.length === 0) {
+            alert('Não há itens no orçamento para exportar.');
+            return;
+        }
+        
+        // Extrai apenas os dados enxutos para a IA ler/modificar
+        const dadosCrono = appState.orcamento.filter(i => i.tipo !== 'etapa').map(i => ({
+            itemEap: i.itemEap,
+            equipe: i.cronograma ? i.cronograma.equipe : 1,
+            predecessora: i.cronograma ? i.cronograma.predecessora : '',
+            espera: i.cronograma ? i.cronograma.espera : 0
+        }));
+
+        const blob = new Blob([JSON.stringify(dadosCrono, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `dados_cronograma_${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    window.importarCronogramaJSON = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importado = JSON.parse(e.target.result);
+                if (Array.isArray(importado)) {
+                    // Mescla os dados importados com o orçamento que já está no ecrã
+                    importado.forEach(dado => {
+                        const item = appState.orcamento.find(i => String(i.itemEap) === String(dado.itemEap));
+                        if (item) {
+                            if (!item.cronograma) item.cronograma = { hh: 0, equipe: 1, predecessora: '', espera: 0 };
+                            if (dado.equipe !== undefined) item.cronograma.equipe = dado.equipe;
+                            if (dado.predecessora !== undefined) item.cronograma.predecessora = dado.predecessora;
+                            if (dado.espera !== undefined) item.cronograma.espera = dado.espera;
+                        }
+                    });
+                    carregarTabelaCronograma();
+                    gerarGraficoGantt();
+                    alert('Cronograma importado e aplicado aos serviços com sucesso!');
+                } else {
+                    alert('O formato do ficheiro deve ser uma lista (Array) de itens.');
+                }
+            } catch (err) {
+                alert('Erro ao ler o ficheiro JSON do cronograma.');
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = ''; // Reseta o input para permitir importar o mesmo ficheiro novamente se necessário
+    };
+
+    // ==========================================
+    // Função que calcula hh
+    // ==========================================
+
+window.calcularHHDosIngredientes = function() {
+        if (!appState.orcamento || appState.orcamento.length === 0) return;
+
+        // 1. Tenta encontrar onde o painel guarda os bancos de dados globais na memória (SINAPI, SCO, etc.)
+        // Ele vai procurar automaticamente qualquer array dentro do appState que não seja o próprio orçamento.
+        let basesDeDados = [];
+        for (let key in appState) {
+            if (Array.isArray(appState[key]) && key !== 'orcamento') {
+                basesDeDados.push(appState[key]);
+            }
+        }
+
+        let atualizados = 0;
+
+        appState.orcamento.forEach(item => {
+            if (item.tipo !== 'etapa' && parseFloat(item.qtd) > 0) {
+                
+                let hhUnitario = 0;
+                let lista = item.ingredientes || item.insumos || item.composicao || item.itens || [];
+
+                // 2. SEGURO DE FALHA: Se o JSON for "enxuto", procura a receita nos bancos de dados!
+                if (lista.length === 0 && item.codigo && item.codigo !== '-') {
+                    for (let banco of basesDeDados) {
+                        let compBanco = banco.find(c => String(c.codigo).trim() === String(item.codigo).trim());
+                        if (compBanco) {
+                            lista = compBanco.ingredientes || compBanco.insumos || compBanco.composicao || compBanco.itens || [];
+                            break; // Achou a composição no banco de dados, para de procurar
+                        }
+                    }
+                }
+
+                // 3. Caso o próprio serviço seja mão de obra direta (Ex: Engenheiro = H, Encarregado = MES)
+                const undItem = item.unidade ? String(item.unidade).trim().toUpperCase() : '';
+                if (lista.length === 0) {
+                    if (undItem === 'H' || undItem === 'CHP' || undItem === 'CHI') hhUnitario = 1;
+                    if (undItem === 'MES' || undItem === 'UN.MÊS') hhUnitario = 176; // 22 dias úteis x 8 horas
+                } 
+                // 4. Varre os insumos da composição encontrada no SINAPI/SCO
+                else if (lista.length > 0) {
+                    lista.forEach(ing => {
+                        const undIng = ing.unidade ? String(ing.unidade).trim().toUpperCase() : '';
+                        const tipoIng = ing.tipo ? String(ing.tipo).trim().toLowerCase() : '';
+                        
+                        // Captura tudo o que for Hora, CHP, CHI ou que esteja categorizado como Mão de Obra
+                        if (undIng === 'H' || undIng === 'CHP' || undIng === 'CHI' || tipoIng.includes('mao_de_obra') || tipoIng.includes('equipamento')) {
+                            let coeficiente = parseFloat(ing.quantidade || ing.coeficiente || ing.consumo || ing.qtd) || 0;
+                            hhUnitario += coeficiente;
+                        }
+                    });
+                }
+
+                // 5. Injeta o HH Total calculado no Cronograma
+                if (hhUnitario > 0) {
+                    if (!item.cronograma) item.cronograma = { hh: 0, equipe: 1, predecessora: '', espera: 0 };
+                    
+                    let hhTotal = hhUnitario * parseFloat(item.qtd);
+                    item.cronograma.hh = Math.ceil(hhTotal);
+                    atualizados++;
+                }
+            }
+        });
+
+        if (atualizados > 0) {
+            alert(`✅ Sucesso! O Cronograma cruzou o orçamento com o Banco de Dados e calculou o HH para ${atualizados} serviços.`);
+            carregarTabelaCronograma(); 
+            gerarGraficoGantt();        
+        } else {
+            alert('⚠️ Aviso: O sistema não conseguiu cruzar os serviços com as composições no banco de dados.');
+        }
+    };
+
+
+// Inicializa o Banco de Prazos na memória
+    if (!appState.bancoPrazos) appState.bancoPrazos = [];
+
+    // Atualiza o select com os serviços do orçamento
+    window.atualizarSelectPrazos = function() {
+        const select = document.getElementById('select-servico-prazo');
+        if (!select || !appState.orcamento) return;
+        
+        let html = '<option value="">-- Escolha um serviço --</option>';
+        appState.orcamento.forEach(item => {
+            if (item.tipo !== 'etapa' && item.codigo && item.codigo !== '-') {
+                html += `<option value="${item.codigo}">${item.codigo} - ${item.descricao.substring(0, 60)}...</option>`;
+            }
+        });
+        select.innerHTML = html;
+    };
+
+    // Puxa dados se já existirem no banco ao selecionar
+    window.carregarDadosServicoPrazo = function() {
+        const codigo = document.getElementById('select-servico-prazo').value;
+        const inputTurma = document.getElementById('input-turma-prazo');
+        const inputProd = document.getElementById('input-prod-prazo');
+        const inputEspera = document.getElementById('input-espera-prazo');
+        
+        const registro = appState.bancoPrazos.find(b => b.codigo === codigo);
+        if (registro) {
+            inputTurma.value = registro.turma || '';
+            inputProd.value = registro.producaoDiaria || '';
+            inputEspera.value = registro.espera || 0;
+        } else {
+            inputTurma.value = ''; inputProd.value = ''; inputEspera.value = '';
+        }
+    };
+
+    // Salva o registro no banco e aplica ao cronograma
+    window.salvarNoBancoPrazos = function() {
+        const codigo = document.getElementById('select-servico-prazo').value;
+        if (!codigo) return alert("Selecione um serviço primeiro.");
+        
+        const turma = document.getElementById('input-turma-prazo').value;
+        const prod = parseFloat(document.getElementById('input-prod-prazo').value);
+        const espera = parseInt(document.getElementById('input-espera-prazo').value) || 0;
+
+        if (!prod || prod <= 0) return alert("Insira uma produção diária válida (maior que zero).");
+
+        // Atualiza ou cria no Banco de Prazos
+        let registro = appState.bancoPrazos.find(b => b.codigo === codigo);
+        if (registro) {
+            registro.turma = turma; registro.producaoDiaria = prod; registro.espera = espera;
+        } else {
+            appState.bancoPrazos.push({ codigo: codigo, turma: turma, producaoDiaria: prod, espera: espera });
+        }
+
+        // Aplica o cálculo no orçamento atual
+        let atualizados = 0;
+        appState.orcamento.forEach(item => {
+            if (item.codigo === codigo && parseFloat(item.qtd) > 0) {
+                if (!item.cronograma) item.cronograma = { hh: 0, equipe: 1, predecessora: '', espera: 0 };
+                
+                // O "truque" da Fábrica: O HH vira a duração exata baseada na produtividade da turma!
+                // HH será (Qtd Total / Produção Diária) * 8 horas
+                let diasNecessarios = Math.ceil(parseFloat(item.qtd) / prod);
+                item.cronograma.hh = diasNecessarios * 8; 
+                item.cronograma.equipe = 1; // 1 Turma Padrão
+                item.cronograma.espera = espera;
+                
+                atualizados++;
+            }
+        });
+
+        alert(`✅ Registrado! Duração calculada e atualizada para ${atualizados} itens no cronograma.`);
+        carregarTabelaCronograma();
+        gerarGraficoGantt();
+    };
+
+    // Exportar e Importar (Backup do seu conhecimento)
+    window.exportarBancoPrazos = function() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState.bancoPrazos, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href",     dataStr);
+        downloadAnchorNode.setAttribute("download", "banco_prazos.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    };
+
+    window.importarBancoPrazos = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                appState.bancoPrazos = JSON.parse(e.target.result);
+                alert("📂 Banco de Prazos carregado com sucesso!");
+            } catch (err) { alert("Erro ao ler o ficheiro."); }
+            event.target.value = '';
+        };
+        reader.readAsText(file);
+    };
+
+
+// Inicializa a base local de composições se não existir
+    if (!appState.baseComposicoesPrazos) appState.baseComposicoesPrazos = {};
+
+    // Preenche o seletor da fábrica com os itens do orçamento atual
+    window.atualizarFabricaComposicoes = function() {
+        const select = document.getElementById('fabrica-select-item');
+        if (!select || !appState.orcamento) return;
+
+        let html = '<option value="">-- Escolha um item do orçamento --</option>';
+        appState.orcamento.forEach(item => {
+            if (item.tipo !== 'etapa' && item.codigo && item.codigo !== '-') {
+                html += `<option value="${item.codigo}" data-desc="${item.descricao}">${item.codigo} - ${item.descricao.substring(0, 50)}...</option>`;
+            }
+        });
+        select.innerHTML = html;
+    };
+
+    // Gera o prompt estruturado pronto para a IA
+    window.prepararPromptFabrica = function() {
+        const select = document.getElementById('fabrica-select-item');
+        const txtArea = document.getElementById('fabrica-prompt-gerado');
+        const option = select.options[select.selectedIndex];
+        
+        if (!select.value) {
+            txtArea.value = '';
+            return;
+        }
+
+        const codigo = select.value;
+        const descricao = option.getAttribute('data-desc');
+
+        // Encontra o item no orçamento para opcionalmente mostrar os insumos se existirem
+        const itemOrc = appState.orcamento.find(i => i.codigo === codigo);
+        let detalhesInsumos = itemOrc && itemOrc.ingredientes ? JSON.stringify(itemOrc.ingredientes) : "Considere a tabela SINAPI/SCO padrão para este serviço.";
+
+        txtArea.value = `Atue como Engenheiro Civil especialista em Planeamento e Custos de Obras Públicas. 
+Analise o seguinte serviço de engenharia:
+- Código: ${codigo}
+- Descrição: ${descricao}
+- Dados de insumos/composição: ${detalhesInsumos}
+
+Com base nisso, forneça APENAS um objeto JSON cru (sem markdown, sem texto adicional) estruturado exatamente com estas chaves:
+{
+  "codigo": "${codigo}",
+  "turma": "Descrição otimizada da equipe padrão (ex: 1 Pedreiro + 1 Servente)",
+  "producaoDiaria": [Número inteiro ou decimal representando a produção da turma por dia na unidade do serviço],
+  "unidade": "Unidade de medida do serviço",
+  "espera": [Número de dias corridos de espera técnica/cura pós-execução, se aplicável, ou 0]
+}`;
+    };
+
+    window.copiarPromptFabrica = function() {
+        const txtArea = document.getElementById('fabrica-prompt-gerado');
+        if (!txtArea.value) return alert("Selecione um serviço primeiro.");
+        navigator.clipboard.writeText(txtArea.value);
+        alert("📋 Prompt copiado para a área de transferência! Cole na sua IA de preferência.");
+    };
+
+    // Valida e salva o JSON enviado pela IA na base de dados
+    window.salvarComposicaoFabrica = function() {
+        const rawJson = document.getElementById('fabrica-json-entrada').value.trim();
+        if (!rawJson) return alert("Cole o JSON fornecido pela IA.");
+
+        try {
+            // Remove eventuais blocos de código markdown se o usuário colar com ```json ... ```
+            let cleanJson = rawJson.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/, "");
+            const obj = JSON.parse(cleanJson);
+
+            if (!obj.codigo || obj.producaoDiaria === undefined) {
+                return alert("Erro: O JSON precisa conter pelo menos as chaves 'codigo' e 'producaoDiaria'.");
+            }
+
+            // Salva na memória do app
+            appState.baseComposicoesPrazos[obj.codigo] = obj;
+
+            alert(`✅ Sucesso! Parâmetros de produtividade para o item [${obj.codigo}] salvos na base local.`);
+            document.getElementById('fabrica-json-entrada').value = '';
+            
+            // Sincroniza automaticamente com o cronograma se o item existir lá
+            atualizarCronogramaComBaseLocal();
+
+        } catch (err) {
+            console.error(err);
+            alert("❌ Erro ao processar o JSON. Certifique-se de colar um objeto JSON válido.");
+        }
+    };
+
+    // Aplica o banco local de produtividade diretamente nos itens do cronograma
+    window.atualizarCronogramaComBaseLocal = function() {
+        if (!appState.orcamento) return;
+        
+        let aplicados = 0;
+        appState.orcamento.forEach(item => {
+            if (appState.baseComposicoesPrazos[item.codigo] && parseFloat(item.qtd) > 0) {
+                const config = appState.baseComposicoesPrazos[item.codigo];
+                if (!item.cronograma) item.cronograma = { hh: 0, equipe: 1, predecessora: '', espera: 0 };
+                
+                // Converte produção diária em HH (8h por dia dividido pela produção)
+                let dias = Math.ceil(parseFloat(item.qtd) / config.producaoDiaria);
+                item.cronograma.hh = dias * 8;
+                item.cronograma.equipe = 1;
+                item.cronograma.espera = config.espera || 0;
+                aplicados++;
+            }
+        });
+
+        if (aplicados > 0 && typeof carregarTabelaCronograma === 'function') {
+            carregarTabelaCronograma();
+            if (typeof gerarGraficoGantt === 'function') gerarGraficoGantt();
+        }
+    };
+
+    window.exportarBaseComposicoes = function() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState.baseComposicoesPrazos, null, 2));
+        const dl = document.createElement('a');
+        dl.setAttribute("href", dataStr);
+        dl.setAttribute("download", "base_fabrica_composicoes.json");
+        document.body.appendChild(dl);
+        dl.click();
+        dl.remove();
+    };
+
 </script>
 
 </body>
