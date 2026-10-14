@@ -321,7 +321,8 @@ window.exportarOrcamentoExcel = async function() {
         } else {
             const precoUn = window.arredondarMoeda(window.obterPrecoAtualizadoDoItem(item, estado, tabela));
             const precoComBdi = window.arredondarMoeda(precoUn * (1 + bdi / 100));
-            const row = wsSintetico.addRow({ eap: item.itemEap, tipo: item.tipo.toUpperCase(), codigo: item.codigo, descricao: item.descricao, unidade: item.unidade, qtd: parseFloat(item.qtd), precoUn: precoUn, precoBdi: precoComBdi, total: window.arredondarMoeda(precoComBdi * item.qtd) });
+            const memTexto = (item.memoria && item.memoria !== '-') ? `\n[Memória de Cálculo: ${item.memoria}]` : '';
+            const row = wsSintetico.addRow({ eap: item.itemEap, tipo: item.tipo.toUpperCase(), codigo: item.codigo, descricao: item.descricao + memTexto, unidade: item.unidade, qtd: parseFloat(item.qtd), precoUn: precoUn, precoBdi: precoComBdi, total: window.arredondarMoeda(precoComBdi * item.qtd) });
             row.getCell(1).alignment = { horizontal: 'center' }; row.getCell(2).alignment = { horizontal: 'center' }; row.getCell(3).alignment = { horizontal: 'center' }; row.getCell(5).alignment = { horizontal: 'center' };
             row.getCell(1).font = { bold: true }; row.getCell(9).font = { bold: true };
         }
@@ -442,23 +443,91 @@ window.exportarOrcamentoExcel = async function() {
             }
 
             if (lista && lista.length > 0) {
+                let custosTotaisInsumos = {};
+                let ingredientesFormatados = [];
+
+                // ==========================================
+                // ETAPA A: Primeira Passada (Itens Normais)
+                // ==========================================
                 lista.forEach(ing => {
                     const codigoItem = ing['Código do Item'] || ing['Código Item'] || ing['Código'] || ing.codigoItem || ing.codigo || '-';
                     if (String(codigoItem).trim().toUpperCase() === String(item.codigo).trim().toUpperCase()) return; 
 
                     const descricao = ing['Descrição'] || ing.descricao || 'Insumo';
-                    const unidade = ing['Unidade'] || ing.unidade || '-';
+                    const unidade = (ing['Unidade'] || ing.unidade || '-').trim();
                     const coeficiente = parseFloat(ing['Coeficiente'] || ing.coeficiente) || 1.0;
+                    
                     const tipoBruto = String(ing['Tipo Item'] || ing.tipoItem || 'INSUMO').toLowerCase();
                     const isSubComp = tipoBruto.includes('composicao') || tipoBruto === 'comp';
                     const isSCOItem = String(codigoItem).startsWith('SCO') || String(codigoItem).startsWith('AD ') || String(codigoItem).startsWith('MAT') || String(codigoItem).startsWith('MOD') || String(codigoItem).startsWith('MOI') || String(codigoItem).startsWith('EQ ') || String(codigoItem).startsWith('IEQ') || String(codigoItem).startsWith('REQ');
                     const tipoItem = ing.tipoItem || (isSubComp ? (isSCOItem ? 'sco_composicao' : 'composicao') : (isSCOItem ? 'sco_insumo' : 'insumo'));
 
-                    let custoIng = ing.precoUnitario || ing['Preço Unitário (R$)'];
-                    if (custoIng === undefined || custoIng === null) { if (typeof window.obterPrecoItemPorCodigoETipo === 'function') custoIng = window.obterPrecoItemPorCodigoETipo(codigoItem, tipoItem, estado, tabela); }
+                    let custoIng = ing.precoUnitario || ing['Preço Unitário (R\$)'];
+                    if (custoIng === undefined || custoIng === null) { 
+                        if (typeof window.obterPrecoItemPorCodigoETipo === 'function') 
+                            custoIng = window.obterPrecoItemPorCodigoETipo(codigoItem, tipoItem, estado, tabela); 
+                    }
                     custoIng = parseFloat(custoIng) || 0;
 
-                    wsAnalitico.addRow({ codigo: codigoItem, tipo: tipoItem.toUpperCase().replace('_', ' '), descricao: `${descricao}`, unidade: unidade, coeficiente: coeficiente, custoUn: custoIng, custoTotal: window.arredondarMoeda(coeficiente * custoIng) });
+                    let custoTotalIngrediente = 0;
+
+                    // Se for um item físico ou Mão de Obra direta (NÃO percentual), calculamos o custo real
+                    if (unidade !== '%') {
+                        custoTotalIngrediente = coeficiente * custoIng;
+                        // Guarda o custo na memória do dicionário para que as taxas o encontrem
+                        custosTotaisInsumos[codigoItem] = custoTotalIngrediente;
+                    }
+
+                    ingredientesFormatados.push({
+                        orig: ing,
+                        codigoItem: codigoItem,
+                        descricao: descricao,
+                        unidade: unidade,
+                        tipoItem: tipoItem,
+                        custoIng: custoIng,
+                        coeficiente: coeficiente,
+                        custoTotalCalculado: custoTotalIngrediente
+                    });
+                });
+
+                // ==========================================
+                // ETAPA B: Segunda Passada (Taxas EVE %)
+                // ==========================================
+                ingredientesFormatados.forEach(ingObj => {
+                    let imprimirCustoUn = ingObj.custoIng; // Para exibir na tabela Excel
+
+                    if (ingObj.unidade === '%') {
+                        let baseDeCalculo = 0;
+                        const arrayBaseEVE = ingObj.orig['Insumos_Base_EVE'];
+
+                        // Roteamento inteligente: O SCO diz-nos exatamente onde bater a taxa
+                        if (Array.isArray(arrayBaseEVE) && arrayBaseEVE.length > 0) {
+                            baseDeCalculo = arrayBaseEVE.reduce((soma, codBase) => {
+                                return soma + (custosTotaisInsumos[codBase] || 0);
+                            }, 0);
+                        } 
+                        // CÁLCULO MISTO/FALLBACK (Para SINAPI ou Bases Próprias que não usam "Insumos_Base_EVE" mas usem %)
+                        else {
+                            baseDeCalculo = Object.values(custosTotaisInsumos).reduce((a, b) => a + b, 0); 
+                            // Nota: Se quiser que as taxas do SINAPI fiquem a zero sem array, comente a linha acima e ponha "baseDeCalculo = 0;"
+                        }
+
+                        // A taxa percentual é aplicada sobre a Base De Cálculo filtrada
+                        ingObj.custoTotalCalculado = ingObj.coeficiente * (ingObj.custoIng / 100) * baseDeCalculo;
+                        // Ajusta o que aparece na coluna de "Custo Un. Direto" do Excel (mostra a Base para efeitos de conferência)
+                        imprimirCustoUn = baseDeCalculo; 
+                        ingObj.descricao = `${ingObj.descricao} (Base de Incidência: R$ ${baseDeCalculo.toFixed(2)})`;
+                    }
+
+                    wsAnalitico.addRow({ 
+                        codigo: ingObj.codigoItem, 
+                        tipo: ingObj.tipoItem.toUpperCase().replace('_', ' '), 
+                        descricao: ingObj.descricao, 
+                        unidade: ingObj.unidade, 
+                        coeficiente: ingObj.coeficiente, 
+                        custoUn: imprimirCustoUn, 
+                        custoTotal: window.arredondarMoeda(ingObj.custoTotalCalculado) 
+                    });
                 });
             } else {
                 wsAnalitico.addRow({ codigo: '-', tipo: 'AVISO', descricao: '   [Nenhuma receita detalhada na base]', unidade: '-', coeficiente: 0, custoUn: 0, custoTotal: 0 });

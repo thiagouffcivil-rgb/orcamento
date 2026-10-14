@@ -265,6 +265,7 @@ window.selecionarItemParaFormulario = function(codigo, descricao, unidade, preco
     
     document.getElementById('input-add-codigo').value = codigo; 
     document.getElementById('input-add-descricao').value = descricao;
+    document.getElementById('input-add-memoria').value = '';
     document.getElementById('input-add-unidade').value = unidade; 
     document.getElementById('input-add-preco').value = preco.toFixed(2);
     document.getElementById('input-add-qtd').focus();
@@ -362,6 +363,7 @@ window.adicionarItemAoOrcamento = function() {
     const unidade = document.getElementById('input-add-unidade').value.trim(); 
     const precoUnitario = parseFloat(document.getElementById('input-add-preco').value) || 0;
     const qtd = parseFloat(document.getElementById('input-add-qtd').value) || 0;
+    const memoria = document.getElementById('input-add-memoria')?.value.trim() || '';
     const grupoSelecionado = (tipo === 'item_avulso') ? document.getElementById('select-add-grupo').value : (tipo === 'etapa' ? 'OUTROS' : 'COMPOSICAO');
 
     if (!descricao) { alert('Por favor, informe a Descrição do item.'); return; }
@@ -375,7 +377,8 @@ window.adicionarItemAoOrcamento = function() {
         unidade: tipo === 'etapa' ? '-' : unidade, 
         qtd: tipo === 'etapa' ? 0 : qtd, 
         precoUnitario: tipo === 'etapa' ? 0 : precoUnitario, 
-        grupo: grupoSelecionado 
+        grupo: grupoSelecionado,
+        memoria: tipo === 'etapa' ? '-' : memoria
     });
     
     window.renderizarOrcamento();
@@ -393,6 +396,36 @@ window.atualizarQuantidadeItem = function(id, novaQtd) {
         item.qtd = parseFloat(novaQtd) || 0; 
         window.renderizarOrcamento(); 
     } 
+};
+
+window.atualizarEapItem = function(id, novoEap) {
+    const item = window.appState.orcamento.find(i => i.id === id);
+    if (item) {
+        item.itemEap = novoEap.trim();
+        window.renderizarOrcamento();
+    }
+};
+
+window.atualizarMemoriaItem = function(id, novaMemoria) {
+    const item = window.appState.orcamento.find(i => i.id === id);
+    if (item) {
+        let formula = novaMemoria.trim();
+        item.memoria = formula || '-';
+        
+        if (formula && formula !== '-') {
+            try {
+                // Substitui vírgulas por pontos e calcula
+                formula = formula.replace(/,/g, '.');
+                let resultado = Function('"use strict";return (' + formula + ')')();
+                if (!isNaN(resultado) && isFinite(resultado)) {
+                    item.qtd = parseFloat(parseFloat(resultado).toFixed(3));
+                }
+            } catch (e) {
+                console.warn("Fórmula inválida na memória da tabela.");
+            }
+        }
+        window.renderizarOrcamento();
+    }
 };
 
 window.removerItemOrcamento = function(id) { 
@@ -444,7 +477,12 @@ window.renderizarOrcamento = function() {
     
     tbody.innerHTML = window.appState.orcamento.map((item, index) => {
         if (item.tipo === 'etapa') {
-            return `<tr class="row-etapa"><td>${item.itemEap}</td><td><span class="header-badge" style="background:#475569;">Etapa</span></td><td>-</td><td colspan="6"><strong>${item.descricao}</strong></td><td class="text-center actions-col"><button class="btn btn-sm btn-outline" onclick="moverItem(${index}, 'cima')">⬆️</button> <button class="btn btn-sm btn-outline" onclick="moverItem(${index}, 'baixo')">⬇️</button> <button class="btn btn-sm btn-danger" onclick="removerItemOrcamento(${item.id})">❌</button></td></tr>`;
+            return `<tr class="row-etapa">
+                <td><input type="text" value="${item.itemEap}" title="Editar EAP" style="width: 55px; text-align: center; font-weight: bold; border: 1px solid transparent; background: transparent; cursor: text;" onchange="atualizarEapItem(${item.id}, this.value)" onfocus="this.style.border='1px solid #cbd5e1'; this.style.background='#fff'" onblur="this.style.border='1px solid transparent'; this.style.background='transparent'"></td>
+                <td><span class="header-badge" style="background:#475569;">Etapa</span></td>
+                <td>-</td><td colspan="6"><strong>${item.descricao}</strong></td>
+                <td class="text-center actions-col"><button class="btn btn-sm btn-outline" onclick="moverItem(${index}, 'cima')">⬆️</button> <button class="btn btn-sm btn-outline" onclick="moverItem(${index}, 'baixo')">⬇️</button> <button class="btn btn-sm btn-danger" onclick="removerItemOrcamento(${item.id})">❌</button></td>
+            </tr>`;
         }
 
         const precoUnitarioAtual = window.obterPrecoAtualizadoDoItem(item, estado, tabela);
@@ -463,12 +501,18 @@ window.renderizarOrcamento = function() {
         else if (item.tipo === 'item_avulso') { badgeCor = 'var(--secondary)'; tipoLabel = `Avulso (${item.grupo || 'Geral'})`; }
 
         return `<tr>
-            <td>${item.itemEap}</td>
+            <td><input type="text" value="${item.itemEap}" title="Editar EAP" style="width: 55px; text-align: center; font-weight: bold; color: inherit; border: 1px solid transparent; background: transparent; cursor: text;" onchange="atualizarEapItem(${item.id}, this.value)" onfocus="this.style.border='1px solid #cbd5e1'; this.style.background='#fff'" onblur="this.style.border='1px solid transparent'; this.style.background='transparent'"></td>
             <td><span class="header-badge" style="background:${badgeCor}; font-size:0.75rem;">${tipoLabel}</span></td>
             <td>${item.codigo}</td>
             <td>${item.descricao}</td>
             <td class="text-center">${item.unidade}</td>
-            <td class="text-right"><input type="number" step="0.001" min="0" value="${item.qtd}" style="width: 95px; text-align: right; padding: 4px 6px;" onchange="atualizarQuantidadeItem(${item.id}, this.value)"></td>
+            <td class="text-right">
+                <input type="number" step="0.001" min="0" value="${item.qtd}" style="width: 95px; text-align: right; padding: 4px 6px;" onchange="atualizarQuantidadeItem(${item.id}, this.value)">
+                <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px; display: flex; align-items: center; justify-content: flex-end;" title="Editar Memória de Cálculo">
+                    <span>🖩</span>
+                    <input type="text" value="${(item.memoria && item.memoria !== '-') ? item.memoria : ''}" placeholder="Fórmula" style="width: 75px; font-size: 0.75rem; padding: 2px 4px; border: 1px solid #e2e8f0; border-radius: 3px; margin-left: 4px; text-align: right;" onchange="atualizarMemoriaItem(${item.id}, this.value)">
+                </div>
+            </td>
             <td class="text-right">${window.formatBRL(precoUnitarioAtual)}</td>
             <td class="text-right">${window.formatBRL(precoComBdi)}</td>
             <td class="text-right"><strong>${window.formatBRL(totalLinha)}</strong></td>
