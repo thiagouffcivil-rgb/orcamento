@@ -99,8 +99,10 @@
                 <div class="form-group">
                     <label for="select-data-base">Data Base:</label>
                     <select id="select-data-base" onchange="carregarBases()">
-                        <option value="2026_08" selected>Agosto / 2026</option>
+                        
                         <option value="2026_07">Julho / 2026</option>
+                        <option value="2026_08">Agosto / 2026</option>
+                        <option value="2026_09" selected>Setembro / 2026</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -173,7 +175,14 @@
                 <div class="form-group" id="group-grupo" style="display: none;"><label for="select-add-grupo">Grupo de Insumo:</label><select id="select-add-grupo"><option value="COMPOSIÇÃO" selected>Composição</option><option value="MATERIAL" selected>Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO">Equipamento</option><option value="OUTROS">Outros / Serviços</option></select></div>
                 <div class="form-group" id="group-unidade"><label for="input-add-unidade">Unidade:</label><input type="text" id="input-add-unidade" placeholder="M2, M3, UN, H, MES..."></div>
                 <div class="form-group" id="group-preco"><label for="input-add-preco">Preço Unitário Sem BDI (R$):</label><input type="number" id="input-add-preco" step="0.01" min="0" placeholder="0.00"></div>
-                <div class="form-group" id="group-qtd"><label for="input-add-qtd">Quantidade:</label><input type="number" id="input-add-qtd" step="0.001" min="0" value="1.00"></div>
+                <div class="form-group" id="group-memoria" style="flex: 1.5;">
+                    <label for="input-add-memoria">Memória de Cálculo (Fórmula):</label>
+                    <input type="text" id="input-add-memoria" placeholder="Ex: 2 * (3.5 + 1.2)" onblur="calcularMemoria()" onkeyup="if(event.key==='Enter') calcularMemoria()">
+                </div>
+                <div class="form-group" id="group-qtd">
+                    <label for="input-add-qtd">Quantidade Final:</label>
+                    <input type="number" id="input-add-qtd" step="0.001" min="0" value="1.00">
+                </div>
             </div>
             <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
                 <button class="btn btn-success" onclick="adicionarItemAoOrcamento();incrementarEAP()">➕ Adicionar ao Orçamento</button>
@@ -606,6 +615,33 @@ window.salvarOrcamentoNaNuven = async function() {
                 }
             }
         } catch (e) { console.error(e); }
+    };
+</script>
+
+<!-- MOTOR DA MEMÓRIA DE CÁLCULO -->
+<script>
+    window.calcularMemoria = function() {
+        const inputMemoria = document.getElementById('input-add-memoria');
+        const inputQtd = document.getElementById('input-add-qtd');
+        let formula = inputMemoria.value.trim();
+        
+        if (!formula) return;
+
+        try {
+            // Substitui vírgulas por pontos (padrão brasileiro para contas)
+            formula = formula.replace(/,/g, '.');
+            
+            // Avalia a fórmula matemática com segurança local
+            let resultado = Function('"use strict";return (' + formula + ')')();
+            
+            if (!isNaN(resultado) && isFinite(resultado)) {
+                // Arredonda para 3 casas decimais e insere no campo de quantidade
+                inputQtd.value = parseFloat(resultado).toFixed(3);
+            }
+        } catch (e) {
+            console.warn("Fórmula matemática incompleta ou inválida na memória.");
+            // Deixa o usuário continuar a digitar sem emitir erros intrusivos
+        }
     };
 </script>
 
