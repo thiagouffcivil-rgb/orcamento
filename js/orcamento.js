@@ -478,7 +478,7 @@ window.renderizarOrcamento = function() {
     tbody.innerHTML = window.appState.orcamento.map((item, index) => {
         if (item.tipo === 'etapa') {
             return `<tr class="row-etapa">
-                <td><input type="text" value="${item.itemEap}" title="Editar EAP" style="width: 55px; text-align: center; font-weight: bold; border: 1px solid transparent; background: transparent; cursor: text;" onchange="atualizarEapItem(${item.id}, this.value)" onfocus="this.style.border='1px solid #cbd5e1'; this.style.background='#fff'" onblur="this.style.border='1px solid transparent'; this.style.background='transparent'"></td>
+                <td><input type="text" value="${item.itemEap}" title="Editar EAP" style="width: 80px; text-align: center; font-weight: bold; border: 1px solid transparent; background: transparent; cursor: text;" onchange="atualizarEapItem(${item.id}, this.value)" onfocus="this.style.border='1px solid #cbd5e1'; this.style.background='#fff'" onblur="this.style.border='1px solid transparent'; this.style.background='transparent'"></td>
                 <td><span class="header-badge" style="background:#475569;">Etapa</span></td>
                 <td>-</td><td colspan="6"><strong>${item.descricao}</strong></td>
                 <td class="text-center actions-col"><button class="btn btn-sm btn-outline" onclick="moverItem(${index}, 'cima')">⬆️</button> <button class="btn btn-sm btn-outline" onclick="moverItem(${index}, 'baixo')">⬇️</button> <button class="btn btn-sm btn-danger" onclick="removerItemOrcamento(${item.id})">❌</button></td>
@@ -501,7 +501,7 @@ window.renderizarOrcamento = function() {
         else if (item.tipo === 'item_avulso') { badgeCor = 'var(--secondary)'; tipoLabel = `Avulso (${item.grupo || 'Geral'})`; }
 
         return `<tr>
-            <td><input type="text" value="${item.itemEap}" title="Editar EAP" style="width: 55px; text-align: center; font-weight: bold; color: inherit; border: 1px solid transparent; background: transparent; cursor: text;" onchange="atualizarEapItem(${item.id}, this.value)" onfocus="this.style.border='1px solid #cbd5e1'; this.style.background='#fff'" onblur="this.style.border='1px solid transparent'; this.style.background='transparent'"></td>
+            <td><input type="text" value="${item.itemEap}" title="Editar EAP" style="width: 80px; text-align: center; font-weight: bold; color: inherit; border: 1px solid transparent; background: transparent; cursor: text;" onchange="atualizarEapItem(${item.id}, this.value)" onfocus="this.style.border='1px solid #cbd5e1'; this.style.background='#fff'" onblur="this.style.border='1px solid transparent'; this.style.background='transparent'"></td>
             <td><span class="header-badge" style="background:${badgeCor}; font-size:0.75rem;">${tipoLabel}</span></td>
             <td>${item.codigo}</td>
             <td>${item.descricao}</td>
