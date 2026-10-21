@@ -197,7 +197,7 @@
             </h2>
             <div class="table-responsive">
                 <table id="tabela-orcamento">
-                    <thead><tr><th style="width: 65px;">Item</th><th style="width: 120px;">Tipo</th><th style="width: 110px;">Código</th><th>Descrição</th><th style="width: 65px;" class="text-center">Unid.</th><th style="width: 110px;" class="text-right">Qtd</th><th style="width: 120px;" class="text-right">Preço Un. (R$)</th><th style="width: 130px;" class="text-right">Preço c/ BDI</th><th style="width: 140px;" class="text-right">Total (R$)</th><th style="width: 110px;" class="text-center actions-col">Ações</th></tr></thead>
+                    <thead><tr><th style="width: 80px;">Item</th><th style="width: 120px;">Tipo</th><th style="width: 110px;">Código</th><th>Descrição</th><th style="width: 65px;" class="text-center">Unid.</th><th style="width: 110px;" class="text-right">Qtd</th><th style="width: 120px;" class="text-right">Preço Un. (R$)</th><th style="width: 130px;" class="text-right">Preço c/ BDI</th><th style="width: 140px;" class="text-right">Total (R$)</th><th style="width: 110px;" class="text-center actions-col">Ações</th></tr></thead>
                     <tbody id="tbody-orcamento"></tbody>
                 </table>
             </div>
@@ -207,14 +207,11 @@
                 <div class="summary-row total-final"><span>TOTAL DO ORÇAMENTO:</span><span id="summary-total-geral" style="color: var(--primary);">R$ 0,00</span></div>
             </div>
             <div class="toolbar no-print">
-                <button class="btn btn-primary" onclick="window.print()">🖨️️ Imprimir / Salvar PDF</button>
-                <button class="btn btn-success" style="background-color: #107c41;" onclick="exportarPlanilhaCompletaExcel()">📑 Exportar Caderno Completo (Excel Multi-Abas)</button>
-                <button class="btn btn-secondary" onclick="exportarOrcamentoCSV()">📊 Exportar Orçamento (CSV)</button>
                 <button class="btn btn-success" onclick="exportarOrcamentoExcel()">📊 Exportar Orçamento (Excel INCA)</button>
+                <button class="btn btn-secondary" onclick="exportarOrcamentoCSV()">📊 Exportar Orçamento (CSV)</button>
                 <button class="btn btn-secondary" onclick="exportarOrcamentoJSON()">📥 Exportar Orçamento (JSON)</button>
                 <button class="btn btn-secondary" onclick="document.getElementById('import-file-input').click()">📤 Importar Orçamento (JSON)</button>
                 <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="importarOrcamentoJSON(event)">
-                <button class="btn btn-success" onclick="salvarBasePropriaJSON()">💾 Salvar Base Própria Local</button>
                 <button class="btn btn-danger" style="margin-left: auto;" onclick="limparOrcamento()">🗑 Limpar Orçamento</button>
             </div>
         </section>
@@ -271,17 +268,31 @@
                     </div>
                 </div>
                 <div style="background: #f0fdf4; padding: 14px; border: 1px solid #bbf7d0; border-radius: 6px; margin-top: 12px;">
-                    <label style="margin-bottom: 8px; display: block; color: #166534;">💡 Inventar / Criar Ingrediente Avulso (Cotação Local ou Especial):</label>
-                    <div class="form-grid" style="align-items: flex-end;">
-                        <div class="form-group"><label for="input-avulso-codigo">Cód. Inventado:</label><input type="text" id="input-avulso-codigo" placeholder="Ex: COT-01"></div>
-                        <div class="form-group" style="flex: 2;"><label for="input-avulso-descricao">Descrição do Insumo Inventado:</label><input type="text" id="input-avulso-descricao" placeholder="Ex: Locação de gerador especial"></div>
-                        <div class="form-group"><label for="input-avulso-unidade">Unid.:</label><input type="text" id="input-avulso-unidade" placeholder="UN, H, MES..."></div>
-                        <div class="form-group"><label for="input-avulso-preco">Preço Un. (R$):</label><input type="number" id="input-avulso-preco" step="0.01" min="0" placeholder="0.00"></div>
-                        <div class="form-group"><label for="select-avulso-grupo">Grupo:</label><select id="select-avulso-grupo"><option value="MATERIAL">Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO" selected>Equipamento</option><option value="OUTROS">Outros</option></select></div>
-                        <div class="form-group"><label for="input-avulso-coef">Coeficiente:</label><input type="number" id="input-avulso-coef" step="0.0001" min="0" value="1.0000"></div>
-                        <button class="btn btn-success" onclick="adicionarIngredienteAvulsoInventado()">✨ Adicionar Inventado</button>
-                    </div>
-                </div>
+    <label style="margin-bottom: 8px; display: block; color: #166534;">💡 Inventar / Criar Ingrediente Avulso (Cotação Local ou Especial):</label>
+    
+    <div class="form-grid" style="align-items: flex-end;">
+        <div class="form-group"><label for="input-avulso-codigo">Cód. Inventado:</label><input type="text" id="input-avulso-codigo" placeholder="Ex: COT-01"></div>
+        <div class="form-group" style="flex: 2;"><label for="input-avulso-descricao">Descrição do Insumo Inventado:</label><input type="text" id="input-avulso-descricao" placeholder="Ex: Locação de gerador especial"></div>
+        <div class="form-group"><label for="input-avulso-unidade">Unid.:</label><input type="text" id="input-avulso-unidade" placeholder="UN, H, MES..."></div>
+        
+        <!-- Campo de preço agora é readonly. O botão ao lado aciona o modal de cotação -->
+        <div class="form-group">
+            <label for="input-avulso-preco">Preço Un. Calculado (R$):</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="input-avulso-preco" readonly style="background-color: #e2e8f0; cursor: not-allowed; width: 100px;" placeholder="0.00">
+                <button type="button" class="btn btn-secondary" onclick="abrirModalCotacoes()" style="padding: 6px 10px;" title="Inserir mapa de cotações">📊 Cotações</button>
+            </div>
+        </div>
+
+        <div class="form-group"><label for="select-avulso-grupo">Grupo:</label><select id="select-avulso-grupo"><option value="MATERIAL">Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO" selected>Equipamento</option><option value="OUTROS">Outros</option></select></div>
+        <div class="form-group"><label for="input-avulso-coef">Coeficiente:</label><input type="number" id="input-avulso-coef" step="0.0001" min="0" value="1.0000"></div>
+        <button class="btn btn-success" onclick="adicionarIngredienteAvulsoInventado()">✨ Adicionar Inventado</button>
+    </div>
+    
+    <!-- Novo: Campo invisível para armazenar a justificativa do TCU que será anexada à composição -->
+    <input type="hidden" id="input-avulso-justificativa" value="">
+    <div id="aviso-justificativa" style="margin-top: 8px; font-size: 0.85rem; color: #b45309; display: none;"></div>
+</div>
             </div>
             <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 15px; flex-wrap: wrap; gap: 10px;">
                 <div><span style="font-size: 1.1rem; font-weight: 600; color: #1e293b;">Custo Unitário Calculado:</span><span id="fabrica-custo-total" style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">R$ 0,00</span></div>
@@ -289,6 +300,7 @@
                     <button class="btn btn-success" onclick="fabricarESalvarComposicao()">🏭 Fabricar Composição</button>
                     <button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarBasePropriaNaNuven()">☁️ Sincronizar Base Própria na Nuvem</button>
                     <button class="btn btn-secondary" onclick="salvarBasePropriaJSON()">💾 Baixar JSON Local</button>
+                    <button class="btn btn-success" onclick="salvarBasePropriaJSON()">💾 Salvar Base Própria Local</button>
                 </div>
             </div>
         </section>
@@ -360,7 +372,7 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <div>
                     <label style="font-weight: bold; font-size: 0.9rem; margin-bottom: 5px; display: block;">1. Selecionar Serviço do Orçamento</label>
-                    <select id="fabrica-select-item" class="form-control" style="margin-bottom: 10px;" onchange="prepararPromptFabrica()"><option value="">-- Escolha um item do orçamento --</option></select>
+                    <select id="fabrica-select-item" class="form-control" style="margin-bottom: 10px;" onmouseenter="atualizarFabricaComposicoes()" onchange="prepararPromptFabrica()"><option value="">-- Escolha um item do orçamento --</option></select>
                     <label style="font-weight: bold; font-size: 0.9rem; margin-bottom: 5px; display: block;">2. Copie o Prompt gerado para a IA</label>
                     <textarea id="fabrica-prompt-gerado" class="form-control" rows="5" readonly style="font-family: monospace; font-size: 0.8rem; background: #fff; margin-bottom: 10px;" placeholder="O prompt aparecerá aqui automaticamente..."></textarea>
                     <button class="btn btn-secondary btn-sm" onclick="copiarPromptFabrica()">📋 Copiar Prompt para a Área de Transferência</button>
@@ -389,6 +401,8 @@
             <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-primary" onclick="carregarTabelaCronograma()">🔄 1. Carregar Serviços</button>
                 <button class="btn btn-success" onclick="gerarGraficoGantt()">📈 2. Desenhar Gantt</button>
+                <button class="btn btn-info" style="color: white; font-weight: bold; background-color: #0ea5e9;" onclick="gerarMatrizMaoDeObra()">👥 3. Matriz de Mão de Obra</button>
+                <button class="btn btn-dark" style="background-color: #334155; color: white; font-weight: bold;" onclick="copiarPromptSequenciamento()">🤖 Copiar Prompt (IA)</button>
                 <button class="btn btn-secondary" onclick="exportarCronogramaJSON()">📤 Exportar Ligações (JSON)</button>
                 <button class="btn btn-secondary" onclick="document.getElementById('import-crono-input').click()">📥 Importar Ligações (JSON)</button>
                 <input type="file" id="import-crono-input" accept=".json" class="hidden" onchange="importarCronogramaJSON(event)">
@@ -406,7 +420,7 @@
                     </div>
                 </h3>
                 <div style="display: grid; grid-template-columns: 3fr 2fr 1fr 1fr 1fr; gap: 10px; align-items: end; margin-bottom: 15px;">
-                    <div><label style="font-size: 0.8rem; font-weight: bold;">1. Selecionar Serviço do Orçamento</label><select id="select-servico-prazo" class="form-control" onchange="carregarDadosServicoPrazo()"><option value="">-- Escolha um serviço --</option></select></div>
+                    <div><label style="font-size: 0.8rem; font-weight: bold;">1. Selecionar Serviço do Orçamento</label><select id="select-servico-prazo" class="form-control" onmouseenter="atualizarFabricaComposicoes()" onchange="carregarDadosServicoPrazo()"><option value="">-- Escolha um serviço --</option></select></div>
                     <div><label style="font-size: 0.8rem; font-weight: bold;">2. Turma Padrão</label><input type="text" id="input-turma-prazo" class="form-control" placeholder="Descrição da equipe"></div>
                     <div><label style="font-size: 0.8rem; font-weight: bold;">3. Produção/Dia</label><input type="number" id="input-prod-prazo" class="form-control" placeholder="Qtd"></div>
                     <div><label style="font-size: 0.8rem; font-weight: bold;">4. Espera (Dias)</label><input type="number" id="input-espera-prazo" class="form-control" placeholder="Cura"></div>
@@ -415,11 +429,29 @@
             </div>
 
             <div class="table-responsive" style="margin-bottom: 25px; max-height: 400px; overflow-y: auto;">
-                <table>
-                    <thead><tr><th style="width: 70px;">EAP</th><th>Descrição do Serviço</th><th style="width: 100px;" class="text-right">Mão de Obra (HH)</th><th style="width: 110px;" class="text-center">Equipa (Qtd)</th><th style="width: 100px;" class="text-center">Duração (Dias)</th><th style="width: 120px;" class="text-center">Predecessora (EAP)</th><th style="width: 110px;" class="text-center">Espera Técnica (Dias)</th></tr></thead>
-                    <tbody id="tbody-cronograma"><tr><td colspan="7" class="text-center" style="padding: 20px; color: var(--text-muted);">Clique em "Carregar Serviços do Orçamento" para iniciar.</td></tr></tbody>
-                </table>
-            </div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 70px;">EAP</th>
+                <th>Descrição do Serviço</th>
+                <th style="width: 90px;" class="text-right">Mão de Obra (HH)</th>
+                <th style="width: 80px;" class="text-center">Equipa (Qtd)</th>
+                <th style="width: 80px;" class="text-center">Duração (Dias)</th>
+                <th style="width: 100px;" class="text-center">Início Pós (EAP)</th>
+                <th style="width: 100px;" class="text-center">Término c/ (EAP)</th> <!-- NOVA COLUNA AQUI -->
+                <th style="width: 90px;" class="text-center">Espera (Dias)</th>
+            </tr>
+        </thead>
+        <tbody id="tbody-cronograma">
+            <tr>
+                <!-- Colspan atualizado para 8 devido à nova coluna -->
+                <td colspan="8" class="text-center" style="padding: 20px; color: var(--text-muted);">
+                    Clique em "Carregar Serviços do Orçamento" para iniciar.
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
 
             <!-- Gráfico de Gantt -->
             <div id="gantt_chart_div" style="width: 100%; min-height: 200px; overflow-x: auto; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
@@ -435,9 +467,19 @@
 <!-- ========================================== -->
 <script src="js/estadoGlobal.js"></script>
 <script src="js/orcamento.js"></script>
-<script src="js/fabrica.js"></script>
+
+<!-- Módulos da Fábrica Fragmentada -->
+<script src="js/fabrica_core.js"></script>
+<script src="js/cotacoes_tcu.js"></script>
+<script src="js/curva_abc.js"></script>
+<script src="js/auditoria.js"></script>
+<script src="js/ia_prompts.js"></script>
+
 <script src="js/cronograma.js"></script>
-<script src="js/exportacao.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/exportacao_json.js"></script>
+<script src="js/exportacao_csv.js"></script>
+<script src="js/exportacao_excel.js"></script>
 
 <!-- FIREBASE (Embutido para evitar bloqueios de CORS locais) -->
 <script type="module">
@@ -644,6 +686,32 @@ window.salvarOrcamentoNaNuven = async function() {
         }
     };
 </script>
+
+<!-- ========================================== -->
+<!-- MODAL DE COTAÇÕES (Adicionar no final do body do index.html) -->
+<!-- ========================================== -->
+<div id="modal-cotacoes" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <!-- Adicionado max-height e overflow-y para rolar caso haja muitas linhas -->
+    <div style="background: white; padding: 20px; border-radius: 8px; width: 95%; max-width: 600px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-height: 90vh; overflow-y: auto;">
+        <h3 style="margin-top: 0; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 10px;">📊 Mapa de Cotações (Metodologia TCU)</h3>
+        
+        <p style="font-size: 0.9rem; color: #475569; margin-bottom: 15px;">Insira a origem (Nome da Empresa, CNPJ ou Link) e o valor coletado. O sistema calculará a variância estatística para adoção da média ou mediana (limite de 25% CV).</p>
+        
+        <!-- Contêiner vazio onde as linhas serão inseridas dinamicamente -->
+        <div id="container-linhas-cotacao" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
+        </div>
+
+        <!-- Botão para adicionar mais cotações -->
+        <button type="button" class="btn btn-secondary" onclick="adicionarLinhaCotacao()" style="margin-bottom: 15px; padding: 6px 10px; font-size: 0.85rem;">➕ Adicionar Cotação</button>
+
+        <div id="resultado-estatistico" style="margin-top: 15px; padding: 10px; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 4px; font-size: 0.85rem; display: none;"></div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: space-between;">
+            <button class="btn btn-outline" onclick="fecharModalCotacoes()">Cancelar</button>
+            <button class="btn btn-primary" onclick="processarETransferirCotacoes()">Calcular & Aplicar</button>
+        </div>
+    </div>
+</div>
 
 </body>
 </html>
