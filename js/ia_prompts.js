@@ -3,16 +3,9 @@
 // ==========================================
 
 window.atualizarFabricaComposicoes = function() {
-    const select = document.getElementById('fabrica-select-item');
-    if (!select || !window.appState.orcamento) return;
-
-    let html = '<option value="">-- Escolha um item do orçamento --</option>';
-    window.appState.orcamento.forEach(item => {
-        if (item.tipo !== 'etapa' && item.codigo && item.codigo !== '-') {
-            html += `<option value="${item.codigo}" data-desc="${item.descricao}">${item.codigo} - ${item.descricao.substring(0, 50)}...</option>`;
-        }
-    });
-    select.innerHTML = html;
+    if (typeof window.atualizarSelectFabricaIA === 'function') {
+        window.atualizarSelectFabricaIA();
+    }
 };
 
 window.prepararPromptFabrica = function() {
@@ -26,12 +19,25 @@ window.prepararPromptFabrica = function() {
     }
 
     const codigo = select.value;
-    const descricao = option.getAttribute('data-desc');
+    const itemOrc = window.appState.orcamento.find(i => String(i.codigo) === String(codigo));
+    const descricao = (option && option.getAttribute('data-desc')) || (itemOrc ? itemOrc.descricao : '');
 
-    const itemOrc = window.appState.orcamento.find(i => i.codigo === codigo);
-    let detalhesInsumos = itemOrc && itemOrc.ingredientes ? JSON.stringify(itemOrc.ingredientes) : "Considere a tabela SINAPI/SCO padrão para este serviço.";
+    let listaIngredientes = (itemOrc && itemOrc.ingredientes) ? itemOrc.ingredientes : [];
+    if (listaIngredientes.length === 0 && window.appState.databases) {
+        const compPropria = (window.appState.databases.base_propria || []).find(i => String(i['Código']).trim() === String(codigo).trim());
+        if (compPropria && Array.isArray(compPropria.ingredientes)) {
+            listaIngredientes = compPropria.ingredientes;
+        } else {
+            const analitico = (window.appState.databases.sinapi_analitico || []).concat(window.appState.databases.sco_analitico || []);
+            listaIngredientes = analitico.filter(i => String(i['Código'] || i['Código Mãe'] || '').trim() === String(codigo).trim());
+        }
+    }
 
-    txtArea.value = `Atue como Engenheiro Civil especialista em Planeamento e Custos de Obras Públicas. Anexei o Caderno Técnico (Markdown) com as regras de aferição e execução.
+    let detalhesInsumos = listaIngredientes.length > 0
+        ? JSON.stringify(listaIngredientes)
+        : "Considere a tabela SINAPI/SCO padrão para este serviço.";
+
+    txtArea.value = `Atue como Engenheiro Civil especialista em Planejamento e Custos de Obras Públicas.
 Analise o seguinte serviço de engenharia:
 - Código: ${codigo}
 - Descrição: ${descricao}
@@ -62,66 +68,6 @@ window.copiarPromptFabrica = function() {
     alert("📋 Prompt copiado para a área de transferência! Cole na sua IA de preferência.");
 };
 
-window.salvarComposicaoFabrica = function() {
-    const rawJson = document.getElementById('fabrica-json-entrada').value.trim();
-    if (!rawJson) return alert("Cole o JSON fornecido pela IA.");
-
-    try {
-        let cleanJson = rawJson.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```\$/, "");
-        const obj = JSON.parse(cleanJson);
-
-        if (!obj.codigo || obj.producaoDiaria === undefined) {
-            return alert("Erro: O JSON precisa conter pelo menos as chaves 'codigo' e 'producaoDiaria'.");
-        }
-
-        window.appState.baseComposicoesPrazos[obj.codigo] = obj;
-
-        alert(`✅ Sucesso! Parâmetros de produtividade para o item [${obj.codigo}] salvos na base local.`);
-        document.getElementById('fabrica-json-entrada').value = '';
-        
-        window.atualizarCronogramaComBaseLocal();
-
-    } catch (err) {
-        console.error(err);
-        alert("❌ Erro ao processar o JSON. Certifique-se de colar um objeto JSON válido.");
-    }
-};
-
-window.atualizarCronogramaComBaseLocal = function() {
-    if (!window.appState.orcamento) return;
-    
-    let aplicados = 0;
-    window.appState.orcamento.forEach(item => {
-        if (window.appState.baseComposicoesPrazos[item.codigo] && parseFloat(item.qtd) > 0) {
-            const config = window.appState.baseComposicoesPrazos[item.codigo];
-            if (!item.cronograma) item.cronograma = { hh: 0, equipe: 1, predecessora: '', espera: 0 };
-            
-            // Agora usa o tamanho real da equipe (ex: 4) para dividir a carga de trabalho
-            let tamanhoDaEquipe = parseInt(config.tamanhoEquipeTotal) || 1;
-            let dias = Math.ceil(parseFloat(item.qtd) / config.producaoDiaria);
-            
-            // Opcional: Se o HH ainda estiver zerado, faz uma estimativa inicial. 
-            // Mas o ideal é depois usar o botão "5. Puxar HH das Composições" para a matemática exata!
-            if (item.cronograma.hh === 0) item.cronograma.hh = dias * 8 * tamanhoDaEquipe;
-            
-            item.cronograma.equipe = tamanhoDaEquipe;
-            item.cronograma.espera = config.espera || 0;
-            
-            // Guarda o detalhe da equipa para a sua fiscalização!
-            item.cronograma.equipeDetalhada = config.equipeFiscalizacao;
-            // Guarda os equipamentos para o fiscal!
-            item.cronograma.equipamentosDetalhe = config.equipamentosFiscalizacao || [];
-
-            aplicados++;
-        }
-    });
-
-    if (aplicados > 0 && typeof window.carregarTabelaCronograma === 'function') {
-        window.carregarTabelaCronograma();
-        if (typeof window.gerarGraficoGantt === 'function') window.gerarGraficoGantt();
-    }
-};
-
 window.exportarBaseComposicoes = function() {
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.appState.baseComposicoesPrazos, null, 2));
     const dl = document.createElement('a');
@@ -137,6 +83,15 @@ window.exportarBaseComposicoes = function() {
 // ==========================================
 
 window.copiarPromptSequenciamento = function() {
+    const itensExecutaveis = (window.appState.orcamento || [])
+        .filter(i => i.tipo !== 'etapa')
+        .map(i => `- EAP ${i.itemEap} | Cód: ${i.codigo} | ${i.descricao} | Qtd: ${i.qtd} ${i.unidade}`)
+        .join('\n');
+
+    const blocoOrcamento = itensExecutaveis
+        ? itensExecutaveis
+        : '[COLE AQUI O SEU ORÇAMENTO (CSV, JSON OU TEXTO COPIADO DA TABELA)]';
+
     const textoPrompt = `Atue como um Engenheiro Civil Sênior especialista em Planejamento, Custos e MS Project.
 Vou te fornecer a lista de serviços (EAP e Descrição) de uma obra pública. 
 
@@ -167,11 +122,10 @@ Retorne APENAS um código JSON cru (sem formatação markdown, sem explicações
 ]
 
 Aqui estão os dados do orçamento da obra:
-[COLE AQUI O SEU ORÇAMENTO (CSV, JSON OU TEXTO COPIADO DA TABELA)]`;
+${blocoOrcamento}`;
 
-    // Função moderna para copiar para a área de transferência
     navigator.clipboard.writeText(textoPrompt).then(() => {
-        alert("✅ Prompt copiado com sucesso!\n\n1. Cole na sua IA (ChatGPT/Claude).\n2. Adicione o seu orçamento abaixo do texto.\n3. Salve a resposta em .json e use o botão 'Importar (JSON)'.");
+        alert("✅ Prompt (já com a lista de serviços do orçamento atual) copiado com sucesso!\n\n1. Cole na sua IA (ChatGPT/Claude/Gemini).\n2. Copie a resposta da IA e clique em '📋 Colar Sequenciamento (Memória)' para aplicar direto sem precisar salvar arquivo!");
     }).catch(err => {
         alert("Erro ao copiar o prompt: " + err);
     });

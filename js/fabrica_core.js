@@ -223,6 +223,7 @@ window.calcularECoberturaCustoFabrica = function() {
         }, 0);
     }
 
+    custoTotal = window.arredondarMoeda(custoTotal);
     const custoTotalEl = document.getElementById('fabrica-custo-total');
     if (custoTotalEl) custoTotalEl.innerText = window.formatBRL(custoTotal);
     return custoTotal;
@@ -237,7 +238,7 @@ window.fabricarESalvarComposicao = function() {
 
     if (!codigo || !descricao || !unidade) { alert('Por favor, preencha o Código Próprio, a Descrição e a Unidade.'); return; }
     const precoCalculado = window.calcularECoberturaCustoFabrica();
-    if (precoCalculado <= 0) { if (!confirm('O preço calculado da composição é R\$ 0,00. Deseja salvar mesmo assim?')) return; }
+    if (precoCalculado <= 0) { if (!confirm('O preço calculado da composição é R$ 0,00. Deseja salvar mesmo assim?')) return; }
 
     const states = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
     const grupoManual = document.getElementById('select-fabrica-grupo-manual') ? document.getElementById('select-fabrica-grupo-manual').value : 'COMPOSICAO';
@@ -255,10 +256,10 @@ window.fabricarESalvarComposicao = function() {
     const idxExistente = window.appState.databases.base_propria.findIndex(i => String(i['Código']) === codigo);
     if (idxExistente >= 0) { 
         window.appState.databases.base_propria[idxExistente] = novaComposicao; 
-        alert(`Composição ${codigo} atualizada!`); 
+        alert(`✅ Composição própria ${codigo} atualizada com sucesso!`); 
     } else { 
         window.appState.databases.base_propria.push(novaComposicao); 
-        alert(`Composição ${codigo} salva com sucesso!`); 
+        alert(`✅ Composição própria ${codigo} salva na Base Própria com sucesso!`); 
     }
 
     document.getElementById('input-fabrica-codigo').value = ''; 
@@ -270,3 +271,44 @@ window.fabricarESalvarComposicao = function() {
     window.renderizarTabelaReceitaFabrica(); 
     window.atualizarOrcamentoEBusca();
 };
+
+// Exportação e Importação JSON da Base Própria
+window.salvarBasePropriaJSON = function() {
+    if (!window.appState.databases.base_propria || window.appState.databases.base_propria.length === 0) {
+        alert('A Base Própria está vazia. Fabrique ao menos uma composição antes de exportar.');
+        return;
+    }
+    const jsonStr = JSON.stringify(window.appState.databases.base_propria, null, 2);
+    window.downloadArquivo(jsonStr, `base_propria_${new Date().toISOString().slice(0,10)}.json`, 'application/json');
+};
+
+window.importarBasePropriaJSON = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const importado = JSON.parse(e.target.result);
+            const lista = Array.isArray(importado) ? importado : (Array.isArray(importado.itens) ? importado.itens : null);
+            if (!lista) {
+                alert('Formato inválido para Base Própria.');
+                return;
+            }
+            window.appState.databases.base_propria = lista;
+            window.atualizarOrcamentoEBusca();
+            alert(`✅ Base Própria importada com sucesso (${lista.length} composições)!`);
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao ler o arquivo JSON da Base Própria.');
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+    const inputManual = document.getElementById('input-fabrica-preco-manual');
+    if (inputManual) {
+        inputManual.addEventListener('input', () => window.calcularECoberturaCustoFabrica());
+    }
+});

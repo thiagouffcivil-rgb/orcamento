@@ -20,14 +20,20 @@ window.exportarOrcamentoCSV = function() {
     const estado = document.getElementById('select-estado').value;
     const tabela = document.getElementById('select-tabela').value;
     const bdi = parseFloat(document.getElementById('input-bdi').value) || 0;
+    const bdiDif = parseFloat(document.getElementById('input-bdi-dif')?.value);
+    const bdiDifFinal = !isNaN(bdiDif) ? bdiDif : bdi;
+    const { mapaPorId: subtotaisEtapas } = window.calcularSubtotaisPorEtapa(window.appState.orcamento, estado, tabela, bdi, bdiDifFinal);
 
-    const cabecalhos = ['Item EAP', 'Tipo', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Preço Unitário (R$)', 'Preço c/ BDI (R$)', 'Total (R$)'];
+    const cabecalhos = ['Item EAP', 'Tipo', 'Código', 'Descrição', 'Unidade', 'Quantidade', 'Preço Unitário (R$)', 'BDI Aplicado (%)', 'Preço c/ BDI (R$)', 'Total (R$)'];
     const linhas = window.appState.orcamento.map(item => {
-        if (item.tipo === 'etapa') return [item.itemEap, 'ETAPA', '', item.descricao, '', '', '', '', ''];
-        const precoUn = window.obterPrecoAtualizadoDoItem(item, estado, tabela);
-        const precoComBdi = precoUn * (1 + bdi / 100);
-        const total = precoComBdi * item.qtd;
-        return [ item.itemEap, item.tipo.toUpperCase(), item.codigo, item.descricao, item.unidade, item.qtd.toFixed(3).replace('.', ','), precoUn.toFixed(2).replace('.', ','), precoComBdi.toFixed(2).replace('.', ','), total.toFixed(2).replace('.', ',') ];
+        if (item.tipo === 'etapa') {
+            const et = subtotaisEtapas[item.id] || { totalComBdi: 0 };
+            return [item.itemEap, 'ETAPA', '', item.descricao, '', '', '', '', '', et.totalComBdi.toFixed(2).replace('.', ',')];
+        }
+        const precoUnBruto = window.obterPrecoAtualizadoDoItem(item, estado, tabela);
+        const bdiItem = window.obterBdiDoItem(item, bdi, bdiDifFinal);
+        const { precoUn, precoComBdi, totalComBdi } = window.calcularValoresItemTCU(precoUnBruto, item.qtd, bdiItem);
+        return [ item.itemEap, item.tipo.toUpperCase(), item.codigo, item.descricao, item.unidade, (parseFloat(item.qtd) || 0).toFixed(3).replace('.', ','), precoUn.toFixed(2).replace('.', ','), bdiItem.toFixed(2).replace('.', ',') + '%', precoComBdi.toFixed(2).replace('.', ','), totalComBdi.toFixed(2).replace('.', ',') ];
     });
     window.exportarTabelaCSV('Orcamento_Obra', cabecalhos, linhas);
 };

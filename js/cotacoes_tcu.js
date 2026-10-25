@@ -44,12 +44,14 @@ window.analisarCotacoesTCU = function(cotacoes) {
         justificativa += " ATENÇÃO: Quantidade de cotações inferior a 3. Exige justificação processual adicional conforme Lei 14.133/2021.";
     }
 
-    return { n: n, media: media, mediana: mediana, cv: cv, valorAdotado: valorAdotado, justificativa: justificativa, valido: n >= 3 };
+    return { n: n, media: media, mediana: mediana, cv: cv, valorAdotado: window.arredondarMoeda(valorAdotado), justificativa: justificativa, valido: n >= 3 };
 };
 
 let contadorCotacoes = 0;
+window.contextoModalCotacoes = 'fabrica'; // 'fabrica' | 'orcamento' | { tipo: 'item_tabela', id: number }
 
-window.abrirModalCotacoes = function() {
+window.abrirModalCotacoes = function(contexto = 'fabrica') {
+    window.contextoModalCotacoes = contexto || 'fabrica';
     document.getElementById('modal-cotacoes').style.display = 'flex';
     document.getElementById('resultado-estatistico').style.display = 'none';
     
@@ -79,7 +81,7 @@ window.adicionarLinhaCotacao = function() {
 
     divLinha.innerHTML = `
         <label style="width: 25px; font-weight: bold; color: #64748b;">#${idAtual}</label>
-        <input type="text" id="cot-fornecedor-${idAtual}" style="flex: 2; min-width: 150px;" placeholder="Nome do Fornecedor ou CNPJ">
+        <input type="text" id="cot-fornecedor-${idAtual}" style="flex: 2; min-width: 150px;" placeholder="Nome do Fornecedor, CNPJ ou Link">
         <input type="date" id="cot-data-${idAtual}" style="flex: 1; min-width: 120px;" value="${hoje}" title="Data da Proposta">
         <input type="number" id="cot-valor-${idAtual}" class="input-cotacao" step="0.01" style="width: 120px;" placeholder="Valor (R$)">
         <button class="btn btn-outline" style="color: red; border-color: transparent; padding: 4px 8px;" onclick="removerLinhaCotacao(${idAtual})" title="Remover cotação">❌</button>
@@ -117,7 +119,7 @@ window.processarETransferirCotacoes = function() {
             const dataProposta = inputData ? window.formatarDataBr(inputData.value) : 'Data N/A';
 
             cotacoes.push(valor);
-            fornecedoresForamInformados.push(`${nomeFornecedor} (${dataProposta})`);
+            fornecedoresForamInformados.push(`${nomeFornecedor} (${dataProposta}: R$ ${valor.toFixed(2).replace('.', ',')})`);
         }
     });
 
@@ -133,21 +135,44 @@ window.processarETransferirCotacoes = function() {
         if (!prosseguir) { return; }
     }
 
-    const listaEmpresas = fornecedoresForamInformados.join(', ');
+    const listaEmpresas = fornecedoresForamInformados.join('; ');
     const justificativaCompleta = `${analise.justificativa} Base de Pesquisa: ${listaEmpresas}.`;
 
     const divResultado = document.getElementById('resultado-estatistico');
     divResultado.style.display = 'block';
-    divResultado.innerHTML = `<strong>Valor Estatístico a Adotar: R$ ${analise.valorAdotado.toFixed(2)}</strong><br><br><em>Justificativa: ${justificativaCompleta}</em>`;
+    divResultado.innerHTML = `<strong>Valor Estatístico a Adotar: R$ ${analise.valorAdotado.toFixed(2).replace('.', ',')}</strong><br><br><em>Justificativa: ${justificativaCompleta}</em>`;
 
     setTimeout(() => {
-        document.getElementById('input-avulso-preco').value = analise.valorAdotado.toFixed(2);
-        document.getElementById('input-avulso-justificativa').value = justificativaCompleta;
-        
-        const avisoDiv = document.getElementById('aviso-justificativa');
-        avisoDiv.style.display = 'block';
-        avisoDiv.innerText = `✅ Preço de R$ ${analise.valorAdotado.toFixed(2)} fixado (Baseado em ${analise.n} cotações). Fontes vinculadas.`;
+        const ctx = window.contextoModalCotacoes;
+        if (ctx === 'orcamento') {
+            const inputPrecoOrc = document.getElementById('input-add-preco');
+            const inputJustOrc = document.getElementById('input-add-justificativa');
+            const avisoOrc = document.getElementById('aviso-justificativa-orcamento');
+            if (inputPrecoOrc) inputPrecoOrc.value = analise.valorAdotado.toFixed(2);
+            if (inputJustOrc) inputJustOrc.value = justificativaCompleta;
+            if (avisoOrc) {
+                avisoOrc.style.display = 'block';
+                avisoOrc.innerText = `✅ Preço R$ ${analise.valorAdotado.toFixed(2).replace('.', ',')} calculado (${analise.n} cotações TCU/Lei 14.133).`;
+            }
+        } else if (ctx && typeof ctx === 'object' && ctx.tipo === 'item_tabela') {
+            const item = window.appState.orcamento.find(i => i.id === ctx.id);
+            if (item) {
+                item.precoUnitario = analise.valorAdotado;
+                item.justificativa = justificativaCompleta;
+                if (typeof window.renderizarOrcamento === 'function') window.renderizarOrcamento();
+            }
+        } else {
+            const inputPrecoFab = document.getElementById('input-avulso-preco');
+            const inputJustFab = document.getElementById('input-avulso-justificativa');
+            const avisoDiv = document.getElementById('aviso-justificativa');
+            if (inputPrecoFab) inputPrecoFab.value = analise.valorAdotado.toFixed(2);
+            if (inputJustFab) inputJustFab.value = justificativaCompleta;
+            if (avisoDiv) {
+                avisoDiv.style.display = 'block';
+                avisoDiv.innerText = `✅ Preço de R$ ${analise.valorAdotado.toFixed(2).replace('.', ',')} fixado (Baseado em ${analise.n} cotações). Fontes vinculadas.`;
+            }
+        }
 
         window.fecharModalCotacoes();
-    }, 2000); 
+    }, 900); 
 };

@@ -2,11 +2,7 @@
 // 2. CURVA ABC E LEVANTAMENTO
 // ==========================================
 
-window.gerarLevantamentoCurvaABC = function() {
-    if (!window.appState.orcamento || window.appState.orcamento.length === 0) { alert('O orçamento está vazio. Adicione itens ao orçamento primeiro.'); return; }
-
-    const estadoConfig = document.getElementById('select-estado').value; 
-    const tabela = document.getElementById('select-tabela').value;
+window.calcularInsumosExplodidos = function(estadoConfig, tabela) {
     const insumosMap = new Map();
 
     function adicionarAoMap(codigo, descricao, unidade, tipoItem, qtd, precoUnitarioManual, origem, grupoExplicito) {
@@ -23,9 +19,20 @@ window.gerarLevantamentoCurvaABC = function() {
         }
     }
 
-    function explodirComposicao(codigoComp, qtdComp, tipoBase, nivel = 0) {
+    function explodirComposicao(codigoComp, qtdComp, tipoBase, nivel = 0, visitados = new Set(), descOriginal = '', unidOriginal = '') {
+        const chaveCompOriginal = String(codigoComp || '').trim();
+        const chaveComp = typeof window.normalizarCodigoComposicao === 'function'
+            ? window.normalizarCodigoComposicao(chaveCompOriginal)
+            : chaveCompOriginal.replace(/\s*\(\/?\)\s*$/, '').trim();
+        if (!chaveComp || visitados.has(chaveComp)) return;
+        const novosVisitados = new Set(visitados);
+        novosVisitados.add(chaveComp);
+
         if (tipoBase === 'base_propria') {
-            const compPropria = window.appState.databases.base_propria.find(i => String(i['Código']).trim() === String(codigoComp).trim());
+            const compPropria = window.appState.databases.base_propria.find(i => {
+                const c = typeof window.normalizarCodigoComposicao === 'function' ? window.normalizarCodigoComposicao(i['Código']) : String(i['Código']).trim();
+                return c === chaveComp;
+            });
             if (compPropria && Array.isArray(compPropria.ingredientes) && compPropria.ingredientes.length > 0) {
                 compPropria.ingredientes.forEach(ing => {
                     const qtdTotalFilho = qtdComp * (parseFloat(ing.coeficiente) || 1.0);
@@ -33,37 +40,59 @@ window.gerarLevantamentoCurvaABC = function() {
                         adicionarAoMap(ing.codigoItem, ing.descricao, ing.unidade, ing.grupo, qtdTotalFilho, ing.precoUnitario, 'base_propria', ing.grupo); 
                         return; 
                     }
-                    const isSubComp = String(ing.tipoItem).includes('composicao') || String(ing.tipoItem) === 'sco_composicao' || String(ing.tipoItem) === 'base_propria';
-                    if (isSubComp && nivel < 2) explodirComposicao(ing.codigoItem, qtdTotalFilho, ing.tipoItem, nivel + 1);
+                    const descIngUpper = String(ing.descricao || '').toUpperCase();
+                    const ehAtomicoMOouEqp = descIngUpper.includes('COM ENCARGOS COMPLEMENTARES') || /\s-\s*CH[PI]\b/.test(descIngUpper);
+                    const isSubComp = !ehAtomicoMOouEqp && (String(ing.tipoItem).includes('composicao') || String(ing.tipoItem) === 'sco_composicao' || String(ing.tipoItem) === 'base_propria');
+                    if (isSubComp && nivel < 6) explodirComposicao(ing.codigoItem, qtdTotalFilho, ing.tipoItem, nivel + 1, novosVisitados, ing.descricao, ing.unidade);
                     else adicionarAoMap(ing.codigoItem, ing.descricao, ing.unidade, ing.tipoItem, qtdTotalFilho, ing.precoUnitario, 'base_propria', ing.grupo);
                 });
                 return;
             }
-            adicionarAoMap(codigoComp, compPropria ? compPropria['Descrição'] : `Composição ${codigoComp}`, compPropria ? compPropria['Unidade'] : 'UN', 'COMPOSICAO', qtdComp, 0, 'base_propria', compPropria ? compPropria.Grupo : 'COMPOSICAO'); 
+            adicionarAoMap(chaveCompOriginal, compPropria ? compPropria['Descrição'] : (descOriginal || `Composição ${chaveCompOriginal}`), compPropria ? compPropria['Unidade'] : (unidOriginal || 'UN'), 'COMPOSICAO', qtdComp, 0, 'base_propria', compPropria ? compPropria.Grupo : 'COMPOSICAO'); 
             return;
         }
 
-        const isSCO = tipoBase === 'sco_composicao' || String(codigoComp).startsWith('SCO-') || String(codigoComp).startsWith('AD ');
+        const isSCO = tipoBase === 'sco_composicao' || chaveComp.startsWith('SCO-') || /^[A-Z]{2,4}\s+\d{2}\./i.test(chaveComp) || chaveComp.startsWith('IEQ') || chaveComp.startsWith('RSE');
         const analiticoBase = isSCO ? window.appState.databases.sco_analitico : window.appState.databases.sinapi_analitico;
-        const filhos = (analiticoBase || []).filter(item => String(item['Código Mãe'] || item['Código'] || '').trim() === String(codigoComp).trim());
+        const filhos = (analiticoBase || []).filter(item => {
+            const cMae = String(item['Código Mãe'] || item['Código'] || '').trim().replace(/\s*\(\/?\)\s*$/, '').trim();
+            return cMae === chaveComp;
+        });
 
-        if (filhos.length === 0) { adicionarAoMap(codigoComp, `Composição ${codigoComp}`, 'UN', 'COMPOSICAO', qtdComp, 0, tipoBase); return; }
+        if (filhos.length === 0) {
+            adicionarAoMap(chaveCompOriginal, descOriginal || `Composição ${chaveCompOriginal}`, unidOriginal || 'UN', 'COMPOSICAO', qtdComp, 0, tipoBase);
+            return;
+        }
 
         filhos.forEach(filho => {
             const codFilho = String(filho['Código do Item'] || filho['Código Item'] || filho['Código'] || '').trim();
+            if (!codFilho || codFilho === chaveComp) return;
             const descFilho = filho['Descrição'] || ''; 
             const unidFilho = filho['Unidade'] || ''; 
             const coefFilho = parseFloat(filho['Coeficiente']) || 1.0;
             const tipoItem = String(filho['Tipo Item'] || filho['Grupo'] || '').toUpperCase(); 
             const qtdTotalFilho = qtdComp * coefFilho;
-            const isSubComp = tipoItem.includes('COMPOS') || tipoItem === 'COMP';
 
-            if (isSubComp && nivel < 2) explodirComposicao(codFilho, qtdTotalFilho, tipoBase, nivel + 1);
-            else adicionarAoMap(codFilho, descFilho, unidFilho, tipoItem, qtdTotalFilho, 0, tipoBase, tipoItem);
+            // Ignora taxas percentuais de EPI/ferramentas do SCO (EVE000050) na lista de materiais físicos se não tiver preço direto
+            if (codFilho.startsWith('EVE') && unidFilho === '%') return;
+
+            const descFilhoUpper = descFilho.toUpperCase();
+            // No SINAPI, composições de Mão de Obra ("COM ENCARGOS COMPLEMENTARES") e de Equipamentos Horários ("- CHP" / "- CHI")
+            // são unidades atômicas de recurso e NÃO devem ser explodidas em Exames, Seguro, Curso de Capacitação, Depreciação ou Juros.
+            const ehRecursoAtomico = descFilhoUpper.includes('COM ENCARGOS COMPLEMENTARES')
+                || /\s-\s*CH[PI]\b/.test(descFilhoUpper)
+                || codFilho.startsWith('IEQ')
+                || codFilho.startsWith('MOD')
+                || codFilho.startsWith('MOI');
+
+            const isSubComp = !ehRecursoAtomico && (tipoItem.includes('COMPOS') || tipoItem === 'COMP');
+
+            if (isSubComp && nivel < 6) explodirComposicao(codFilho, qtdTotalFilho, tipoBase, nivel + 1, novosVisitados, descFilho, unidFilho);
+            else adicionarAoMap(codFilho, descFilho, unidFilho, tipoItem, qtdTotalFilho, 0, tipoBase, ehRecursoAtomico && descFilhoUpper.includes('COM ENCARGOS COMPLEMENTARES') ? 'MÃO DE OBRA' : tipoItem);
         });
     }
 
-    window.appState.orcamento.forEach(item => {
+    (window.appState.orcamento || []).forEach(item => {
         if (item.tipo === 'etapa') return;
         if (item.tipo === 'composicao' || item.tipo === 'sco_composicao' || item.tipo === 'base_propria') explodirComposicao(item.codigo, item.qtd, item.tipo, 0);
         else if (item.tipo === 'insumo' || item.tipo === 'sco_insumo') adicionarAoMap(item.codigo, item.descricao, item.unidade, 'INSUMO', item.qtd, item.precoUnitario, item.tipo);
@@ -107,7 +136,7 @@ window.gerarLevantamentoCurvaABC = function() {
         else if (achado && achado['Grupo']) insumo.grupo = String(achado['Grupo']).toUpperCase().trim();
         else if (!insumo.grupo && insumo.tipoItem) insumo.grupo = insumo.tipoItem.toUpperCase();
 
-        return { ...insumo, precoUnitario: precoUnitario, custoTotal: (insumo.qtdTotal * precoUnitario) || 0 };
+        return { ...insumo, precoUnitario: precoUnitario, custoTotal: window.arredondarMoeda((insumo.qtdTotal * precoUnitario) || 0) };
     });
 
     const listaMaoDeObra = []; const listaMateriais = [];
@@ -118,19 +147,34 @@ window.gerarLevantamentoCurvaABC = function() {
         const desc = (item.descricao || '').toUpperCase(); 
 
         let isMaoDeObra = false;
-        if (grupo.includes('MÃO DE OBRA') || grupo.includes('MAO DE OBRA') || cod.startsWith('MOD') || cod.startsWith('MOI') || desc.includes('(HORISTA)') || desc.includes('(MENSALISTA)')) {
+        let isEquipamento = false;
+        if (grupo.includes('MÃO DE OBRA') || grupo.includes('MAO DE OBRA') || cod.startsWith('MOD') || cod.startsWith('MOI') || desc.includes('(HORISTA)') || desc.includes('(MENSALISTA)') || desc.includes('COM ENCARGOS COMPLEMENTARES')) {
             isMaoDeObra = true;
         }
-        if (cod.startsWith('EQ ') || cod.startsWith('IEQ') || cod.startsWith('REQ') || grupo.includes('EQUIPAMENTO')) {
+        if (cod.startsWith('EQ ') || cod.startsWith('IEQ') || cod.startsWith('REQ') || grupo.includes('EQUIPAMENTO') || item.unidade === 'CHP' || item.unidade === 'CHI' || /\s-\s*CH[PI]\b/.test(desc)) {
             isMaoDeObra = false;
+            isEquipamento = true;
         }
+
+        item.categoria = isMaoDeObra ? 'MÃO DE OBRA' : (isEquipamento ? 'EQUIPAMENTO' : 'MATERIAL / SERVIÇO');
 
         if (isMaoDeObra) listaMaoDeObra.push(item);
         else listaMateriais.push(item);
     });
 
+    listaInsumos.sort((a, b) => b.custoTotal - a.custoTotal);
     listaMaoDeObra.sort((a, b) => b.custoTotal - a.custoTotal); 
     listaMateriais.sort((a, b) => b.custoTotal - a.custoTotal);
+
+    return { listaInsumos, listaMaoDeObra, listaMateriais };
+};
+
+window.gerarLevantamentoCurvaABC = function() {
+    if (!window.appState.orcamento || window.appState.orcamento.length === 0) { alert('O orçamento está vazio. Adicione itens ao orçamento primeiro.'); return; }
+
+    const estadoConfig = document.getElementById('select-estado').value; 
+    const tabela = document.getElementById('select-tabela').value;
+    const { listaMaoDeObra, listaMateriais } = window.calcularInsumosExplodidos(estadoConfig, tabela);
     
     window.appState.cachedMaoDeObra = listaMaoDeObra; 
     window.appState.cachedMateriaisABC = listaMateriais;
@@ -183,17 +227,19 @@ window.gerarCurvaABCOrcamento = function() {
     const estadoConfig = document.getElementById('select-estado').value; 
     const tabela = document.getElementById('select-tabela').value; 
     const bdi = parseFloat(document.getElementById('input-bdi').value) || 0;
+    const bdiDif = parseFloat(document.getElementById('input-bdi-dif')?.value);
+    const bdiDifFinal = !isNaN(bdiDif) ? bdiDif : bdi;
     const itensValidos = window.appState.orcamento.filter(item => item.tipo !== 'etapa');
 
     const listaCalculada = itensValidos.map(item => {
         const precoUnitarioBase = window.obterPrecoAtualizadoDoItem(item, estadoConfig, tabela);
-        const precoComBdi = precoUnitarioBase * (1 + bdi / 100); 
-        const custoTotal = precoComBdi * item.qtd;
-        return { ...item, precoComBdi: precoComBdi, custoTotal: custoTotal };
+        const bdiItem = window.obterBdiDoItem(item, bdi, bdiDifFinal);
+        const { precoComBdi, totalComBdi } = window.calcularValoresItemTCU(precoUnitarioBase, item.qtd, bdiItem);
+        return { ...item, precoComBdi: precoComBdi, custoTotal: totalComBdi };
     });
     
     listaCalculada.sort((a, b) => b.custoTotal - a.custoTotal);
-    const somaTotal = listaCalculada.reduce((acc, item) => acc + item.custoTotal, 0); 
+    const somaTotal = window.arredondarMoeda(listaCalculada.reduce((acc, item) => acc + item.custoTotal, 0)); 
     let custoAcumulado = 0;
 
     const tbody = document.getElementById('tbody-abc-orcamento');
@@ -201,7 +247,7 @@ window.gerarCurvaABCOrcamento = function() {
         tbody.innerHTML = `<tr><td colspan="10" class="text-center" style="padding: 15px; color: var(--text-muted);">Nenhum serviço válido para cálculo.</td></tr>`;
     } else {
         tbody.innerHTML = listaCalculada.map((item) => {
-            custoAcumulado += item.custoTotal;
+            custoAcumulado = window.arredondarMoeda(custoAcumulado + item.custoTotal);
             const percTotal = somaTotal > 0 ? (item.custoTotal / somaTotal) * 100 : 0; 
             const percAcum = somaTotal > 0 ? (custoAcumulado / somaTotal) * 100 : 0;
             let classeABC = 'A'; let classeBadge = 'badge-a';
