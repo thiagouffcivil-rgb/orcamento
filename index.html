@@ -3,17 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Orçamentos de Engenharia Local - SINAPI, SCO, Base Própria & Curva ABC</title>
+    <title>Painel de Orçamentos de Engenharia - SINAPI, SCO, Base Própria & Curva ABC</title>
     
     <!-- Bibliotecas Externas -->
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 
-    <!-- Ficheiro de Estilos Modularizado -->
+    <!-- Arquivo de Estilos Modularizado -->
     <link rel="stylesheet" href="css/style.css">
-
-    <!-- Firebase Modularizado -->
-    <script type="module" src="js/firebase.js"></script>
 </head>
 <body>
 
@@ -23,14 +20,19 @@
             <h1><span style="font-size: 1.8rem;">📐</span> Painel de Orçamentos - DIENGI</h1>
             <p>Sistema para Orçamentação Civil baseado nas tabelas SINAPI (Caixa), SCO (Rio de Janeiro), Base Própria & Curva ABC</p>
         </div>
-        <div class="header-badge">Arquitetura SPA / JSON Local</div>
+        <div class="header-badge">Arquitetura SPA / Nuvem & Local</div>
     </header>
+
+    <!-- BANNER DE STATUS DO CARREGAMENTO DAS BASES -->
+    <div id="status-bases-banner" class="no-print" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 16px; margin-bottom: 18px; border-radius: 6px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1e40af; font-size: 0.9rem;">
+        <span>⏳ Inicializando bases de dados SINAPI e SCO...</span>
+    </div>
 
     <!-- MENU DE NAVEGAÇÃO -->
     <div class="tab-menu no-print">
         <button class="tab-btn active" onclick="window.abrirAba(event, 'aba-orcamento')">📊 Orçamentação</button>
         <button class="tab-btn" onclick="window.abrirAba(event, 'aba-fabrica')">🏭 Fábrica & Curvas ABC</button>
-        <button class="tab-btn" onclick="window.abrirAba(event, 'aba-cronograma')">📅 Planejamento (Gantt)</button>
+        <button class="tab-btn" onclick="window.abrirAba(event, 'aba-cronograma'); setTimeout(() => { if(typeof window.carregarTabelaCronograma === 'function') window.carregarTabelaCronograma(); if(typeof window.gerarGraficoGantt === 'function') window.gerarGraficoGantt(); }, 150);">📅 Planejamento (Gantt)</button>
     </div>
 
     <!-- ========================================== -->
@@ -42,11 +44,11 @@
         <section class="section-card no-print" id="section-nuvem">
             <h2 class="section-title">
                 <span><span>☁️</span> Orçamentos Colaborativos na Nuvem</span>
-                <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Trabalhe em conjunto com os seus colegas em tempo real</span>
+                <span id="badge-orcamento-ativo-nuvem" style="font-size: 0.82rem; font-weight: 600; background: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 12px; border: 1px solid #cbd5e1;">📝 Rascunho Local (Não vinculado à nuvem)</span>
             </h2>
             
             <div id="cloud-login-ui" style="background: #f8fafc; padding: 20px; border-radius: 6px; border: 1px solid var(--border-color); display: none;">
-                <p style="margin-bottom: 15px; font-size: 0.95rem; color: #475569;"><strong>Acesso Restrito:</strong> Introduza as suas credenciais para aceder ao painel partilhado.</p>
+                <p style="margin-bottom: 15px; font-size: 0.95rem; color: #475569;"><strong>Acesso Restrito:</strong> Insira suas credenciais para acessar o painel compartilhado da equipe.</p>
                 <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                     <input type="email" id="login-email" placeholder="E-mail de acesso" style="max-width: 250px;">
                     <input type="password" id="login-pass" placeholder="Senha" style="max-width: 200px;" onkeyup="if(event.key==='Enter') loginEquipa()">
@@ -55,23 +57,29 @@
             </div>
 
             <div id="cloud-app-ui" style="display: none;">
-                <div id="lista-orcamentos-nuvem" style="padding: 10px 0; color: var(--text-muted);">A ligar à base de dados na nuvem...</div>
+                <div id="lista-orcamentos-nuvem" style="padding: 10px 0; color: var(--text-muted);">Conectando ao banco de dados na nuvem...</div>
                 <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 10px;">
-                    <span style="font-size: 0.9rem; color: #6c757d;">Acedido como: <strong id="user-name-display">...</strong></span>
-                    <button class="btn btn-sm btn-outline" style="color: var(--danger);" onclick="logoutNuvem()">🚪 Terminar Sessão</button>
+                    <span style="font-size: 0.9rem; color: #6c757d;">Conectado como: <strong id="user-name-display">...</strong></span>
+                    <button class="btn btn-sm btn-outline" style="color: var(--danger);" onclick="logoutNuvem()">🚪 Encerrar Sessão</button>
                 </div>
             </div>
         </section>
 
         <!-- Dados do Projeto -->
         <section class="section-card">
-            <div class="section-card" style="background-color: #f8fafc; border-color: #cbd5e1; margin-bottom: 20px;">
-                <h4 style="margin-top: 0; color: #334155;">📋 Dados do Projeto / Obra</h4>
-                <div style="display: grid; grid-template-columns: 2fr 2fr 1fr 1fr; gap: 15px; align-items: end;">
+            <div class="section-card" style="background-color: #f8fafc; border-color: #cbd5e1; margin-bottom: 0;">
+                <h4 style="margin-top: 0; margin-bottom: 12px; color: #334155;">📋 Dados do Projeto / Obra e Responsável Técnico</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; margin-bottom: 12px;">
                     <div><label style="font-weight: bold; font-size: 0.85rem;">Nome do Projeto (Sigla):</label><input type="text" id="input-obra-nome" class="form-control" placeholder="Ex: INCA - HC I"></div>
                     <div><label style="font-weight: bold; font-size: 0.85rem;">Localização:</label><input type="text" id="input-obra-local" class="form-control" placeholder="Ex: Praça Cruz Vermelha, 23..."></div>
                     <div><label style="font-weight: bold; font-size: 0.85rem;">Nº do Processo (SEI):</label><input type="text" id="input-obra-processo" class="form-control" placeholder="Ex: 25410.00000/2026-00"></div>
                     <div><label style="font-weight: bold; font-size: 0.85rem;">Revisão:</label><input type="text" id="input-obra-revisao" class="form-control" value="R00"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; padding-top: 10px; border-top: 1px dashed #cbd5e1;">
+                    <div><label style="font-weight: bold; font-size: 0.85rem;">👷 Orçamentista / Resp. Técnico:</label><input type="text" id="input-obra-orcamentista" class="form-control" placeholder="Ex: Eng.º Thiago ..."></div>
+                    <div><label style="font-weight: bold; font-size: 0.85rem;">Cargo / Especialidade:</label><input type="text" id="input-obra-cargo" class="form-control" placeholder="Ex: Engenheiro Civil - DIENGI/INCA"></div>
+                    <div><label style="font-weight: bold; font-size: 0.85rem;">Registro (CREA / CAU / Matrícula):</label><input type="text" id="input-obra-registro" class="form-control" placeholder="Ex: CREA-RJ 2010..."></div>
+                    <div><label style="font-weight: bold; font-size: 0.85rem;">Nº da ART / RRT:</label><input type="text" id="input-obra-art" class="form-control" placeholder="Ex: ART nº 2026... (ou Anexada ao Processo)"></div>
                 </div>
             </div>
         </section>
@@ -79,10 +87,10 @@
         <!-- Configurações -->
         <section class="section-card">
             <h2 class="section-title">
-                <span><span class="section-number">1</span> Configurações da Obra</span>
-                <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Aplica preços estaduais e BDI automaticamente</span>
+                <span><span class="section-number">1</span> Configurações da Obra & BDI (TCU)</span>
+                <span style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">Aplica preços estaduais, BDI Padrão e BDI Diferenciado automaticamente</span>
             </h2>
-            <div class="form-grid">
+            <div class="form-grid" style="align-items: flex-end;">
                 <div class="form-group">
                     <label for="select-estado">Estado (UF):</label>
                     <select id="select-estado" onchange="carregarBases()">
@@ -97,17 +105,23 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="select-data-base">Data Base:</label>
+                    <label for="select-data-base">Data-Base:</label>
                     <select id="select-data-base" onchange="carregarBases()">
-                        
                         <option value="2026_07">Julho / 2026</option>
                         <option value="2026_08">Agosto / 2026</option>
                         <option value="2026_09" selected>Setembro / 2026</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="input-bdi">BDI (%):</label>
+                    <label for="input-bdi">BDI Padrão — Serviços (%):</label>
                     <input type="number" id="input-bdi" value="22.30" step="0.01" min="0" oninput="atualizarOrcamentoEBusca()">
+                </div>
+                <div class="form-group">
+                    <label for="input-bdi-dif" title="BDI Reduzido para fornecimento de equipamentos/materiais relevantes (Súmula 253 / Acórdão 2622/2013 TCU)">⚡ BDI Diferenciado — Equip. (%):</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="number" id="input-bdi-dif" value="14.02" step="0.01" min="0" oninput="atualizarOrcamentoEBusca()" style="background: #fffbeb; border-color: #fde68a;">
+                        <button type="button" class="btn btn-secondary" onclick="abrirModalComposicaoBDI()" style="white-space: nowrap; padding: 6px 10px;" title="Abrir Calculadora Oficial de BDI (Acórdão 2622/2013 TCU)">🧮 Detalhar BDI</button>
+                    </div>
                 </div>
             </div>
         </section>
@@ -127,26 +141,38 @@
                 <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                     <div style="flex: 1; min-width: 220px;">
                         <label style="font-size: 0.85rem; color: #64748b; display: block; margin-bottom: 4px;">Ordenar resultados por:</label>
-                        <select id="select-ordenacao" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+                        <select id="select-ordenacao" onchange="if(document.getElementById('input-busca').value.trim()) executarBuscaGlobal()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid var(--border-color);">
                             <option value="preco-asc">💰 Menor Preço (Crescente)</option>
                             <option value="alfabetica">🔤 Ordem Alfabética (A-Z)</option>
                         </select>
                     </div>
                 </div>
             </div>
+
+            <!-- Busca Global -->
             <div class="form-grid" style="margin-top: 10px;">
-                <div class="form-group full-width" style="display: flex; gap: 10px; flex-direction: row; align-items: flex-end;">
-                    <div style="flex: 1;">
-                        <label for="input-busca">Termos de Busca (Aceita múltiplas palavras, ex: <i>concreto 25mpa</i> ou <i>cabo cobre</i>):</label>
-                        <input type="text" id="input-busca" placeholder="Digite o que procura..." onkeyup="if(event.key==='Enter') executarBuscaGlobal()">
+                <div class="form-group full-width" style="display: flex; gap: 10px; flex-direction: row; align-items: flex-end; flex-wrap: wrap;">
+                    
+                    <div style="flex: 2; min-width: 250px;">
+                        <label for="input-busca">Termos de Busca (ex: concreto 25mpa):</label>
+                        <input type="text" id="input-busca" placeholder="Digite o código ou descrição que procura..." onkeyup="if(event.key==='Enter') executarBuscaGlobal()">
                     </div>
-                    <button class="btn btn-primary" onclick="executarBuscaGlobal()">🔍 Buscar Global</button>
+                    
+                    <!-- Filtro de Unidade com Datalist Inteligente -->
+                    <div style="flex: 1; min-width: 120px; max-width: 160px;">
+                        <label for="input-busca-unidade">Unid. (Opcional):</label>
+                        <input type="text" id="input-busca-unidade" list="lista-unidades-datalist" placeholder="Ex: M3, UN..." onkeyup="if(event.key==='Enter') executarBuscaGlobal()" style="text-transform: uppercase;">
+                        <datalist id="lista-unidades-datalist"></datalist>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="executarBuscaGlobal()" style="white-space: nowrap;">🔍 Buscar Global</button>
                 </div>
             </div>
+
             <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
                 <table>
                     <thead>
-                        <tr><th style="width: 90px;">Base</th><th style="width: 110px;">Código</th><th>Descrição</th><th style="width: 70px;" class="text-center">Unid.</th><th style="width: 130px;" class="text-right">Preço Un. (R$)</th><th style="width: 100px;" class="text-center">Ação</th></tr>
+                        <tr><th style="width: 90px;">Base</th><th style="width: 110px;">Código</th><th>Descrição</th><th style="width: 70px;" class="text-center">Unid.</th><th style="width: 130px;" class="text-right">Preço Un. (R$)</th><th style="width: 145px;" class="text-center">Ação</th></tr>
                     </thead>
                     <tbody id="tbody-busca-resultados">
                         <tr><td colspan="6" class="text-center" style="color: var(--text-muted); padding: 20px;">Selecione as bases, digite os termos desejados e clique em "Buscar Global".</td></tr>
@@ -169,42 +195,62 @@
                 <label class="radio-option" onclick="selectLancamentoTypeRadio(this, 'item_avulso')"><input type="radio" name="tipo_lancamento" value="item_avulso"> Item Avulso Manual</label>
             </div>
             <div class="form-grid" style="margin-top: 15px;">
-                <div class="form-group" id="group-eap"><label for="input-item-eap">Item EAP (ex: 1.0, 1.1):</label><div style="display: flex; gap: 6px;"><input type="text" id="input-item-eap" placeholder="1.0"><button type="button" class="btn btn-secondary btn-sm" onclick="incrementarEAP()" title="Incrementar subitem EAP (+1)" style="padding: 0 12px; font-weight: bold; white-space: nowrap;">+1</button></div></div>
+                <div class="form-group" id="group-eap"><label for="input-item-eap">Item EAP (ex: 1.0, 1.1):</label><div style="display: flex; gap: 6px;"><input type="text" id="input-item-eap" placeholder="Auto (ex: 1.0)"><button type="button" class="btn btn-secondary btn-sm" onclick="incrementarEAP()" title="Incrementar subitem EAP (+1)" style="padding: 0 12px; font-weight: bold; white-space: nowrap;">+1</button></div></div>
                 <div class="form-group" id="group-codigo"><label for="input-add-codigo">Código:</label><input type="text" id="input-add-codigo" placeholder="Código do item" onblur="buscarCodigoParaAdicionar()"></div>
                 <div class="form-group full-width" id="group-descricao"><label for="input-add-descricao">Descrição do Item / Etapa:</label><input type="text" id="input-add-descricao" placeholder="Descrição detalhada..."></div>
-                <div class="form-group" id="group-grupo" style="display: none;"><label for="select-add-grupo">Grupo de Insumo:</label><select id="select-add-grupo"><option value="COMPOSIÇÃO" selected>Composição</option><option value="MATERIAL" selected>Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO">Equipamento</option><option value="OUTROS">Outros / Serviços</option></select></div>
+                <div class="form-group" id="group-grupo" style="display: none;"><label for="select-add-grupo">Grupo de Insumo:</label><select id="select-add-grupo"><option value="COMPOSIÇÃO">Composição</option><option value="MATERIAL" selected>Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO">Equipamento</option><option value="OUTROS">Outros / Serviços</option></select></div>
                 <div class="form-group" id="group-unidade"><label for="input-add-unidade">Unidade:</label><input type="text" id="input-add-unidade" placeholder="M2, M3, UN, H, MES..."></div>
-                <div class="form-group" id="group-preco"><label for="input-add-preco">Preço Unitário Sem BDI (R$):</label><input type="number" id="input-add-preco" step="0.01" min="0" placeholder="0.00"></div>
-                <div class="form-group" id="group-memoria" style="flex: 1.5;">
-                    <label for="input-add-memoria">Memória de Cálculo (Fórmula):</label>
-                    <input type="text" id="input-add-memoria" placeholder="Ex: 2 * (3.5 + 1.2)" onblur="calcularMemoria()" onkeyup="if(event.key==='Enter') calcularMemoria()">
+                <div class="form-group" id="group-preco">
+                    <label for="input-add-preco">Preço Unitário Sem BDI (R$):</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="number" id="input-add-preco" step="0.01" min="0" placeholder="0.00">
+                        <button type="button" id="btn-cotacoes-orcamento" class="btn btn-secondary" onclick="abrirModalCotacoes('orcamento')" style="display: none; padding: 6px 10px; white-space: nowrap;" title="Inserir Mapa de Cotações (Metodologia TCU / Lei 14.133)">📊 Cotações TCU</button>
+                    </div>
+                    <input type="hidden" id="input-add-justificativa" value="">
+                    <div id="aviso-justificativa-orcamento" style="font-size: 0.78rem; color: #166534; display: none; margin-top: 2px;"></div>
                 </div>
+                <!-- Área Multilinha para Fatiamento -->
+                <div class="form-group span-2" id="group-memoria">
+                    <label for="input-add-memoria">Memória de Cálculo (Fatiamento Multilinha):</label>
+                    <textarea id="input-add-memoria" rows="3" class="form-control" style="font-family: monospace; font-size: 0.85rem;" placeholder="Ex:&#10;A: QTD(2.1) * 0.05 [Área A]&#10;B: QTD(2.2) * 0.03 [Área B]" onblur="calcularMemoria()"></textarea>
+                    <div style="font-size: 0.75rem; color: #64748b; margin-top: 2px;">Use "A: ", "B: " ou "TÉRREO: " no início de cada linha para gerar subitens automáticos.</div>
+                </div>
+                
                 <div class="form-group" id="group-qtd">
                     <label for="input-add-qtd">Quantidade Final:</label>
-                    <input type="number" id="input-add-qtd" step="0.001" min="0" value="1.00">
+                    <input type="number" id="input-add-qtd" step="0.001" min="0" value="1.000">
+                    <label id="label-chk-bdi-dif" style="display: none; align-items: center; gap: 6px; font-size: 0.78rem; color: #b45309; font-weight: 600; margin-top: 6px; cursor: pointer;" title="Marque para aplicar a taxa de BDI Diferenciado (Equipamentos - Súmula 253 TCU) a este item">
+                        <input type="checkbox" id="chk-add-bdi-dif"> ⚡ Usar BDI Diferenciado (Equip.)
+                    </label>
                 </div>
             </div>
             <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
-                <button class="btn btn-success" onclick="adicionarItemAoOrcamento();incrementarEAP()">➕ Adicionar ao Orçamento</button>
+                <button class="btn btn-success" onclick="adicionarItemFatiadoOuNormal()">➕ Adicionar ao Orçamento</button>
             </div>
         </section>
 
         <!-- Tabela do Orçamento -->
         <section class="section-card" id="section-orcamento">
-            <h2 class="section-title">
+            <h2 class="section-title" style="flex-wrap: wrap; gap: 10px;">
                 <span><span class="section-number">4</span> Orçamento Atual da Obra</span>
-                <span id="info-obra-header" style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">UF: <strong>RJ</strong> | Tabela: <strong>Não Desonerada</strong> | BDI: <strong>25.00%</strong></span>
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <span id="info-obra-header" style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted);">UF: <strong>RJ</strong> | Tabela: <strong>Não Desonerada</strong> | BDI: <strong>22.30%</strong></span>
+                    <button class="btn btn-sm btn-outline no-print" onclick="ordenarOrcamentoPorEAP()" title="Ordenar todas as linhas automaticamente pela numeração EAP">🔢 Ordenar por EAP</button>
+                </div>
             </h2>
             <div class="table-responsive">
                 <table id="tabela-orcamento">
-                    <thead><tr><th style="width: 80px;">Item</th><th style="width: 120px;">Tipo</th><th style="width: 110px;">Código</th><th>Descrição</th><th style="width: 65px;" class="text-center">Unid.</th><th style="width: 110px;" class="text-right">Qtd</th><th style="width: 120px;" class="text-right">Preço Un. (R$)</th><th style="width: 130px;" class="text-right">Preço c/ BDI</th><th style="width: 140px;" class="text-right">Total (R$)</th><th style="width: 110px;" class="text-center actions-col">Ações</th></tr></thead>
+                    <thead><tr><th style="width: 80px;">Item</th><th style="width: 120px;">Tipo</th><th style="width: 110px;">Código</th><th>Descrição</th><th style="width: 65px;" class="text-center">Unid.</th><th style="width: 110px;" class="text-right">Qtd</th><th style="width: 130px;" class="text-right">Preço Un. (R$)</th><th style="width: 130px;" class="text-right">Preço c/ BDI</th><th style="width: 140px;" class="text-right">Total (R$)</th><th style="width: 110px;" class="text-center actions-col">Ações</th></tr></thead>
                     <tbody id="tbody-orcamento"></tbody>
                 </table>
             </div>
             <div class="summary-card">
                 <div class="summary-row"><span>Subtotal (Sem BDI):</span><strong id="summary-subtotal">R$ 0,00</strong></div>
-                <div class="summary-row"><span>Valor do BDI (<span id="summary-bdi-perc">22.30</span>%):</span><strong id="summary-bdi-valor">R$ 0,00</strong></div>
+                <div class="summary-row"><span>Valor do BDI Padrão (<span id="summary-bdi-perc">22.30</span>%):</span><strong id="summary-bdi-valor">R$ 0,00</strong></div>
+                <div class="summary-row" id="row-summary-bdi-dif" style="display: none; color: #b45309;"><span>⚡ Valor do BDI Diferenciado (<span id="summary-bdi-dif-perc">14.02</span>%):</span><strong id="summary-bdi-dif-valor">R$ 0,00</strong></div>
                 <div class="summary-row total-final"><span>TOTAL DO ORÇAMENTO:</span><span id="summary-total-geral" style="color: var(--primary);">R$ 0,00</span></div>
+            </div>
+            <div id="bloco-assinatura-orcamentista" style="display: none; margin-top: 25px; padding-top: 20px; border-top: 1px dashed #cbd5e1; text-align: center; font-size: 0.88rem; color: #334155;">
             </div>
             <div class="toolbar no-print">
                 <button class="btn btn-success" onclick="exportarOrcamentoExcel()">📊 Exportar Orçamento (Excel INCA)</button>
@@ -262,45 +308,44 @@
                     <div class="form-grid" style="align-items: flex-end;">
                         <div class="form-group"><label for="input-ingrediente-codigo">Cód do Item:</label><input type="text" id="input-ingrediente-codigo" placeholder="Ex: 00000370"></div>
                         <div class="form-group"><label for="select-ingrediente-tipo">Tipo Base:</label><select id="select-ingrediente-tipo"><option value="insumo" selected>Insumo SINAPI</option><option value="composicao">Composição SINAPI</option><option value="sco_insumo">Insumo SCO (RJ)</option><option value="sco_composicao">Composição SCO (RJ)</option><option value="base_propria">Base Própria</option></select></div>
-                        <div class="form-group"><label for="select-ingrediente-grupo">Grupo:</label><select id="select-ingrediente-grupo"><option value="COMPOSIÇÃO" selected>Composição</option><option value="MATERIAL" selected>Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO">Equipamento</option><option value="OUTROS">Outros / Serviços</option></select></div>
+                        <div class="form-group"><label for="select-ingrediente-grupo">Grupo:</label><select id="select-ingrediente-grupo"><option value="COMPOSIÇÃO">Composição</option><option value="MATERIAL" selected>Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO">Equipamento</option><option value="OUTROS">Outros / Serviços</option></select></div>
                         <div class="form-group"><label for="input-ingrediente-coef">Coeficiente:</label><input type="number" id="input-ingrediente-coef" step="0.0001" min="0" value="1.0000"></div>
                         <button class="btn btn-secondary" onclick="adicionarIngredienteManualAorReceita()">➕ Adicionar da Base</button>
                     </div>
                 </div>
                 <div style="background: #f0fdf4; padding: 14px; border: 1px solid #bbf7d0; border-radius: 6px; margin-top: 12px;">
-    <label style="margin-bottom: 8px; display: block; color: #166534;">💡 Inventar / Criar Ingrediente Avulso (Cotação Local ou Especial):</label>
-    
-    <div class="form-grid" style="align-items: flex-end;">
-        <div class="form-group"><label for="input-avulso-codigo">Cód. Inventado:</label><input type="text" id="input-avulso-codigo" placeholder="Ex: COT-01"></div>
-        <div class="form-group" style="flex: 2;"><label for="input-avulso-descricao">Descrição do Insumo Inventado:</label><input type="text" id="input-avulso-descricao" placeholder="Ex: Locação de gerador especial"></div>
-        <div class="form-group"><label for="input-avulso-unidade">Unid.:</label><input type="text" id="input-avulso-unidade" placeholder="UN, H, MES..."></div>
-        
-        <!-- Campo de preço agora é readonly. O botão ao lado aciona o modal de cotação -->
-        <div class="form-group">
-            <label for="input-avulso-preco">Preço Un. Calculado (R$):</label>
-            <div style="display: flex; gap: 5px;">
-                <input type="text" id="input-avulso-preco" readonly style="background-color: #e2e8f0; cursor: not-allowed; width: 100px;" placeholder="0.00">
-                <button type="button" class="btn btn-secondary" onclick="abrirModalCotacoes()" style="padding: 6px 10px;" title="Inserir mapa de cotações">📊 Cotações</button>
-            </div>
-        </div>
+                    <label style="margin-bottom: 8px; display: block; color: #166534;">💡 Inventar / Criar Ingrediente Avulso (Cotação Local ou Especial):</label>
+                    
+                    <div class="form-grid" style="align-items: flex-end;">
+                        <div class="form-group"><label for="input-avulso-codigo">Cód. Inventado:</label><input type="text" id="input-avulso-codigo" placeholder="Ex: COT-01"></div>
+                        <div class="form-group span-2"><label for="input-avulso-descricao">Descrição do Insumo Inventado:</label><input type="text" id="input-avulso-descricao" placeholder="Ex: Locação de gerador especial"></div>
+                        <div class="form-group"><label for="input-avulso-unidade">Unid.:</label><input type="text" id="input-avulso-unidade" placeholder="UN, H, MES..."></div>
+                        
+                        <div class="form-group">
+                            <label for="input-avulso-preco">Preço Un. Calculado (R$):</label>
+                            <div style="display: flex; gap: 5px;">
+                                <input type="text" id="input-avulso-preco" readonly style="background-color: #e2e8f0; cursor: not-allowed; width: 100px;" placeholder="0.00">
+                                <button type="button" class="btn btn-secondary" onclick="abrirModalCotacoes('fabrica')" style="padding: 6px 10px;" title="Inserir mapa de cotações">📊 Cotações</button>
+                            </div>
+                        </div>
 
-        <div class="form-group"><label for="select-avulso-grupo">Grupo:</label><select id="select-avulso-grupo"><option value="MATERIAL">Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO" selected>Equipamento</option><option value="OUTROS">Outros</option></select></div>
-        <div class="form-group"><label for="input-avulso-coef">Coeficiente:</label><input type="number" id="input-avulso-coef" step="0.0001" min="0" value="1.0000"></div>
-        <button class="btn btn-success" onclick="adicionarIngredienteAvulsoInventado()">✨ Adicionar Inventado</button>
-    </div>
-    
-    <!-- Novo: Campo invisível para armazenar a justificativa do TCU que será anexada à composição -->
-    <input type="hidden" id="input-avulso-justificativa" value="">
-    <div id="aviso-justificativa" style="margin-top: 8px; font-size: 0.85rem; color: #b45309; display: none;"></div>
-</div>
+                        <div class="form-group"><label for="select-avulso-grupo">Grupo:</label><select id="select-avulso-grupo"><option value="MATERIAL">Material</option><option value="MÃO DE OBRA">Mão de Obra</option><option value="EQUIPAMENTO" selected>Equipamento</option><option value="OUTROS">Outros</option></select></div>
+                        <div class="form-group"><label for="input-avulso-coef">Coeficiente:</label><input type="number" id="input-avulso-coef" step="0.0001" min="0" value="1.0000"></div>
+                        <button class="btn btn-success" onclick="adicionarIngredienteAvulsoInventado()">✨ Adicionar Inventado</button>
+                    </div>
+                    
+                    <input type="hidden" id="input-avulso-justificativa" value="">
+                    <div id="aviso-justificativa" style="margin-top: 8px; font-size: 0.85rem; color: #b45309; display: none;"></div>
+                </div>
             </div>
             <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 15px; flex-wrap: wrap; gap: 10px;">
-                <div><span style="font-size: 1.1rem; font-weight: 600; color: #1e293b;">Custo Unitário Calculado:</span><span id="fabrica-custo-total" style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">R$ 0,00</span></div>
+                <div><span style="font-size: 1.1rem; font-weight: 600; color: #1e293b;">Custo Unitário Calculado: </span><span id="fabrica-custo-total" style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">R$ 0,00</span></div>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn btn-success" onclick="fabricarESalvarComposicao()">🏭 Fabricar Composição</button>
                     <button class="btn btn-primary" style="background-color: #6f42c1;" onclick="salvarBasePropriaNaNuven()">☁️ Sincronizar Base Própria na Nuvem</button>
-                    <button class="btn btn-secondary" onclick="salvarBasePropriaJSON()">💾 Baixar JSON Local</button>
-                    <button class="btn btn-success" onclick="salvarBasePropriaJSON()">💾 Salvar Base Própria Local</button>
+                    <button class="btn btn-secondary" onclick="salvarBasePropriaJSON()">💾 Exportar Base Própria (JSON)</button>
+                    <button class="btn btn-outline" onclick="document.getElementById('import-base-propria-input').click()">📂 Importar Base Própria (JSON)</button>
+                    <input type="file" id="import-base-propria-input" accept=".json" class="hidden" onchange="importarBasePropriaJSON(event)">
                 </div>
             </div>
         </section>
@@ -372,7 +417,7 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <div>
                     <label style="font-weight: bold; font-size: 0.9rem; margin-bottom: 5px; display: block;">1. Selecionar Serviço do Orçamento</label>
-                    <select id="fabrica-select-item" class="form-control" style="margin-bottom: 10px;" onmouseenter="atualizarFabricaComposicoes()" onchange="prepararPromptFabrica()"><option value="">-- Escolha um item do orçamento --</option></select>
+                    <select id="fabrica-select-item" class="form-control" style="margin-bottom: 10px;" onmouseenter="atualizarSelectFabricaIA()" onchange="prepararPromptFabrica()"><option value="">-- Escolha um item do orçamento --</option></select>
                     <label style="font-weight: bold; font-size: 0.9rem; margin-bottom: 5px; display: block;">2. Copie o Prompt gerado para a IA</label>
                     <textarea id="fabrica-prompt-gerado" class="form-control" rows="5" readonly style="font-family: monospace; font-size: 0.8rem; background: #fff; margin-bottom: 10px;" placeholder="O prompt aparecerá aqui automaticamente..."></textarea>
                     <button class="btn btn-secondary btn-sm" onclick="copiarPromptFabrica()">📋 Copiar Prompt para a Área de Transferência</button>
@@ -381,8 +426,8 @@
                     <label style="font-weight: bold; font-size: 0.9rem; margin-bottom: 5px; display: block;">3. Cole o JSON retornado pela IA</label>
                     <textarea id="fabrica-json-entrada" class="form-control" rows="5" style="font-family: monospace; font-size: 0.8rem; background: #fff; margin-bottom: 10px;" placeholder='Cole aqui o JSON exato...'></textarea>
                     <div style="display: flex; gap: 10px;">
-                        <button class="btn btn-primary" onclick="salvarComposicaoFabrica()">💾 Salvar na Base Local/Nuven</button>
-                        <button class="btn btn-outline" onclick="exportarBaseComposicoes()">📥 Exportar Base Completa</button>
+                        <button class="btn btn-primary" onclick="salvarComposicaoFabrica()">💾 Salvar e Aplicar ao Orçamento</button>
+                        <button class="btn btn-outline" onclick="recuperarJsonIA()">👁️ Recuperar JSON Salvo</button>
                     </div>
                 </div>
             </div>
@@ -396,66 +441,102 @@
     <div id="aba-cronograma" class="tab-content">
         <section class="section-card">
             <h2 class="section-title">
-                <span><span class="section-number">8</span> Cronograma Físico e Gráfico de Gantt</span>
+                <span><span class="section-number">8</span> Cronograma Físico-Financeiro (Curva S), Gantt e Histograma</span>
             </h2>
-            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+
+            <!-- Guia Rápido Explicativo -->
+            <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid var(--primary); border-radius: 6px; padding: 12px 16px; margin-bottom: 16px; font-size: 0.85rem; color: #334155; line-height: 1.5;">
+                <strong>🧭 Como funciona esta aba (Passo a Passo):</strong><br>
+                1️⃣ <strong>Carregar Serviços:</strong> Traz os itens do orçamento para a tabela abaixo.<br>
+                2️⃣ <strong>Puxar HH das Composições:</strong> Extrai da composição SINAPI/SCO as horas do <em>Profissional Chave (Gargalo)</em> e calcula o prazo: <code>Duração (dias úteis) = HH ÷ (Equipe × Ritmo × 8h/dia)</code>.<br>
+                3️⃣ <strong>Sequenciamento:</strong> Em <strong>Início Pós (EAP)</strong> informe a tarefa anterior (ex: <code>1.1</code> ou <code>SS:1.1</code> para iniciar junto). Em <strong>Término c/ (EAP)</strong> digite <code>PROJETO</code> para itens contínuos (ex: <em>Administração Local / Engenheiro</em>) acompanharem toda a obra.<br>
+                4️⃣ <strong>Gantt, Físico-Financeiro (Curva S) & Histograma:</strong> Gera o gráfico de barras com o prazo total, a distribuição financeira mês a mês (padrão TCU/Edital) e o quadro semanal de operários.
+            </div>
+
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-right: 10px;">
+                    <label for="input-data-inicio-obra" style="font-weight: bold; font-size: 0.9rem; color: #334155; margin: 0;">📅 Início da Obra:</label>
+                    <input type="date" id="input-data-inicio-obra" class="form-control" onchange="if(typeof gerarGraficoGantt === 'function') gerarGraficoGantt(); if(typeof gerarCronogramaFisicoFinanceiro === 'function' && document.getElementById('cronograma-fisico-financeiro-container')?.style.display !== 'none') gerarCronogramaFisicoFinanceiro(false); if(typeof gerarMatrizMaoDeObra === 'function' && document.getElementById('matriz-mao-de-obra-container')) gerarMatrizMaoDeObra();">
+                </div>
                 <button class="btn btn-primary" onclick="carregarTabelaCronograma()">🔄 1. Carregar Serviços</button>
-                <button class="btn btn-success" onclick="gerarGraficoGantt()">📈 2. Desenhar Gantt</button>
-                <button class="btn btn-info" style="color: white; font-weight: bold; background-color: #0ea5e9;" onclick="gerarMatrizMaoDeObra()">👥 3. Matriz de Mão de Obra</button>
-                <button class="btn btn-dark" style="background-color: #334155; color: white; font-weight: bold;" onclick="copiarPromptSequenciamento()">🤖 Copiar Prompt (IA)</button>
+                <button class="btn btn-info" style="color: white; font-weight: bold; background-color: #0284c7;" onclick="calcularHHDosIngredientes()">⚙️ 2. Puxar HH das Composições</button>
+                <button class="btn btn-success" onclick="gerarGraficoGantt()">📈 3. Desenhar Gantt</button>
+                <button class="btn btn-primary" style="background-color: #059669; border-color: #059669; font-weight: bold;" onclick="gerarCronogramaFisicoFinanceiro(true)">💰 4. Físico-Financeiro (Curva S)</button>
+                <button class="btn btn-info" style="color: white; font-weight: bold; background-color: #0ea5e9;" onclick="gerarMatrizMaoDeObra()">👥 5. Histograma de Mão de Obra</button>
+                <button class="btn btn-dark" style="background-color: #334155; color: white; font-weight: bold;" onclick="copiarPromptSequenciamento()" title="Copia um prompt com seus serviços para a IA sugerir as predecessoras">🤖 Prompt Sequenciamento (IA)</button>
+                <button class="btn btn-primary" style="background-color: #7c3aed; border-color: #7c3aed; color: white; font-weight: bold;" onclick="importarSequenciamentoDaMemoria()" title="Extrai e aplica automaticamente o JSON de sequenciamento copiado na memória (Área de Transferência)">📋 Colar Sequenciamento (Memória)</button>
                 <button class="btn btn-secondary" onclick="exportarCronogramaJSON()">📤 Exportar Ligações (JSON)</button>
                 <button class="btn btn-secondary" onclick="document.getElementById('import-crono-input').click()">📥 Importar Ligações (JSON)</button>
                 <input type="file" id="import-crono-input" accept=".json" class="hidden" onchange="importarCronogramaJSON(event)">
-                <button class="btn btn-info" style="color: white; font-weight: bold;" onclick="calcularHHDosIngredientes()">⚙️ 5. Puxar HH das Composições</button>
+            </div>
+
+            <!-- Painel Rápido para Colar Sequenciamento da IA (Fallback caso o navegador bloqueie leitura direta da área de transferência) -->
+            <div id="painel-colar-sequenciamento-ia" class="hidden" style="background: #f5f3ff; border: 1px solid #c4b5fd; border-left: 4px solid #7c3aed; border-radius: 6px; padding: 14px; margin-bottom: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="color: #5b21b6; font-size: 0.92rem;">📋 Colar Resposta de Sequenciamento da IA (JSON ou Texto com JSON)</strong>
+                    <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('painel-colar-sequenciamento-ia').classList.add('hidden')">✖ Fechar</button>
+                </div>
+                <textarea id="textarea-sequenciamento-ia" rows="5" style="font-family: monospace; font-size: 0.82rem; margin-bottom: 8px;" placeholder="Cole aqui (Ctrl+V) a resposta gerada pela IA (mesmo que contenha texto ou blocos ```json)..."></textarea>
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" class="btn btn-primary" style="background-color: #7c3aed;" onclick="aplicarSequenciamentoDoPainelManual()">✅ Extrair e Aplicar ao Cronograma</button>
+                </div>
             </div>
 
             <!-- Fábrica de Prazos -->
             <div class="section-card" style="background-color: #f0fdf4; border-color: #bbf7d0; margin-bottom: 20px;">
                 <h3 style="margin-top: 0; color: #166534; display: flex; justify-content: space-between; align-items: center;">
-                    <span>⏱️ Fábrica de Prazos (Banco Local de Produtividade)</span>
+                    <span>⏱️ Ajuste Manual de Produtividade Diária (Opcional — para serviços sem HH ou com produção conhecida)</span>
                     <div>
                         <button class="btn btn-sm btn-outline" onclick="exportarBancoPrazos()">💾 Exportar Banco</button>
                         <button class="btn btn-sm btn-outline" onclick="document.getElementById('import-banco-prazos').click()">📂 Importar Banco</button>
                         <input type="file" id="import-banco-prazos" accept=".json" class="hidden" onchange="importarBancoPrazos(event)">
                     </div>
                 </h3>
-                <div style="display: grid; grid-template-columns: 3fr 2fr 1fr 1fr 1fr; gap: 10px; align-items: end; margin-bottom: 15px;">
-                    <div><label style="font-size: 0.8rem; font-weight: bold;">1. Selecionar Serviço do Orçamento</label><select id="select-servico-prazo" class="form-control" onmouseenter="atualizarFabricaComposicoes()" onchange="carregarDadosServicoPrazo()"><option value="">-- Escolha um serviço --</option></select></div>
+                <div style="display: grid; grid-template-columns: 3fr 2fr 1fr 1fr 1fr; gap: 10px; align-items: end; margin-bottom: 5px;">
+                    <div><label style="font-size: 0.8rem; font-weight: bold;">1. Selecionar Serviço do Orçamento</label><select id="select-servico-prazo" class="form-control" onmouseenter="atualizarSelectPrazos()" onchange="carregarDadosServicoPrazo()"><option value="">-- Escolha um serviço --</option></select></div>
                     <div><label style="font-size: 0.8rem; font-weight: bold;">2. Turma Padrão</label><input type="text" id="input-turma-prazo" class="form-control" placeholder="Descrição da equipe"></div>
-                    <div><label style="font-size: 0.8rem; font-weight: bold;">3. Produção/Dia</label><input type="number" id="input-prod-prazo" class="form-control" placeholder="Qtd"></div>
-                    <div><label style="font-size: 0.8rem; font-weight: bold;">4. Espera (Dias)</label><input type="number" id="input-espera-prazo" class="form-control" placeholder="Cura"></div>
-                    <button class="btn btn-success" onclick="salvarNoBancoPrazos()">Registrar</button>
+                    <div><label style="font-size: 0.8rem; font-weight: bold;">3. Produção/Dia</label><input type="number" id="input-prod-prazo" class="form-control" step="0.01" min="0" placeholder="Qtd/dia"></div>
+                    <div><label style="font-size: 0.8rem; font-weight: bold;">4. Espera (Dias)</label><input type="number" id="input-espera-prazo" class="form-control" min="0" value="0" placeholder="Cura"></div>
+                    <button class="btn btn-success" onclick="salvarNoBancoPrazos()">Aplicar Prazo</button>
                 </div>
             </div>
 
-            <div class="table-responsive" style="margin-bottom: 25px; max-height: 400px; overflow-y: auto;">
-    <table>
-        <thead>
-            <tr>
-                <th style="width: 70px;">EAP</th>
-                <th>Descrição do Serviço</th>
-                <th style="width: 90px;" class="text-right">Mão de Obra (HH)</th>
-                <th style="width: 80px;" class="text-center">Equipa (Qtd)</th>
-                <th style="width: 80px;" class="text-center">Duração (Dias)</th>
-                <th style="width: 100px;" class="text-center">Início Pós (EAP)</th>
-                <th style="width: 100px;" class="text-center">Término c/ (EAP)</th> <!-- NOVA COLUNA AQUI -->
-                <th style="width: 90px;" class="text-center">Espera (Dias)</th>
-            </tr>
-        </thead>
-        <tbody id="tbody-cronograma">
-            <tr>
-                <!-- Colspan atualizado para 8 devido à nova coluna -->
-                <td colspan="8" class="text-center" style="padding: 20px; color: var(--text-muted);">
-                    Clique em "Carregar Serviços do Orçamento" para iniciar.
-                </td>
-            </tr>
-        </tbody>
-    </table>
-</div>
+            <div class="table-responsive" style="margin-bottom: 20px; max-height: 420px; overflow-y: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">EAP</th>
+                            <th>Descrição do Serviço</th>
+                            <th style="width: 90px;" class="text-right">Mão de Obra (HH)</th>
+                            <th style="width: 80px;" class="text-center">Equipe (Qtd)</th>
+                            <th style="width: 80px;" class="text-center">Ritmo (%)</th>
+                            <th style="width: 80px;" class="text-center">Duração (Dias)</th>
+                            <th style="width: 100px;" class="text-center">Início Pós (EAP)</th>
+                            <th style="width: 100px;" class="text-center">Término c/ (EAP)</th>
+                            <th style="width: 90px;" class="text-center">Espera (Dias)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-cronograma">
+                        <tr>
+                            <td colspan="9" class="text-center" style="padding: 20px; color: var(--text-muted);">
+                                Clique em "1. Carregar Serviços" para iniciar.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Card de Resumo do Prazo Total da Obra -->
+            <div id="resumo-prazo-obra-card" style="display: none; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 12px 18px; margin-bottom: 15px; font-size: 0.95rem; color: #1e293b;">
+            </div>
 
             <!-- Gráfico de Gantt -->
             <div id="gantt_chart_div" style="width: 100%; min-height: 200px; overflow-x: auto; background: #f8fafc; border: 1px solid var(--border-color); border-radius: 6px; padding: 10px;">
                 <div style="text-align: center; color: #94a3b8; padding-top: 80px;">O gráfico de barras aparecerá aqui.</div>
+            </div>
+
+            <!-- Cronograma Físico-Financeiro e Curva S -->
+            <div id="cronograma-fisico-financeiro-container" style="display: none; margin-top: 25px; border: 1px solid var(--border-color); border-radius: 6px; background: white; overflow: hidden;">
             </div>
         </section>
     </div> <!-- Fim da Aba 3 -->
@@ -467,15 +548,17 @@
 <!-- ========================================== -->
 <script src="js/estadoGlobal.js"></script>
 <script src="js/orcamento.js"></script>
-
-<!-- Módulos da Fábrica Fragmentada -->
+<script src="js/busca.js"></script>
 <script src="js/fabrica_core.js"></script>
 <script src="js/cotacoes_tcu.js"></script>
 <script src="js/curva_abc.js"></script>
 <script src="js/auditoria.js"></script>
 <script src="js/ia_prompts.js"></script>
-
 <script src="js/cronograma.js"></script>
+<script src="js/fabrica_ia.js"></script>
+<script src="js/io_cronograma.js"></script>
+<script src="js/matriz_recursos.js"></script>
+<script src="js/motor_hh.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/exportacao_json.js"></script>
 <script src="js/exportacao_csv.js"></script>
@@ -484,7 +567,7 @@
 <!-- FIREBASE (Embutido para evitar bloqueios de CORS locais) -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
     const firebaseConfig = {
@@ -500,8 +583,27 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    window.orcamentoAtualId = null; 
+    window.orcamentoAtualId = window.orcamentoAtualId || null;
+    window.orcamentoAtualNome = window.orcamentoAtualNome || null;
     window.currentUser = null;
+
+    window.atualizarBadgeOrcamentoNuvem = function() {
+        const badge = document.getElementById('badge-orcamento-ativo-nuvem');
+        if (!badge) return;
+        if (window.orcamentoAtualId) {
+            badge.style.background = '#f0fdf4';
+            badge.style.color = '#166534';
+            badge.style.borderColor = '#bbf7d0';
+            badge.innerHTML = `☁️ Vinculado à Nuvem: <strong>${window.orcamentoAtualNome || window.orcamentoAtualId}</strong>`;
+        } else {
+            badge.style.background = '#f1f5f9';
+            badge.style.color = '#475569';
+            badge.style.borderColor = '#cbd5e1';
+            badge.innerHTML = `📝 Rascunho Local (Não vinculado à nuvem)`;
+        }
+    };
+
+    window.atualizarBadgeOrcamentoNuvem();
 
     onAuthStateChanged(auth, async (user) => {
         const loginUi = document.getElementById('cloud-login-ui');
@@ -518,7 +620,7 @@
             window.carregarListaNuvem(); 
         } else {
             window.currentUser = null;
-            if (loginUi) loginUi.style.display = 'block'; // Mostra a caixa de login
+            if (loginUi) loginUi.style.display = 'block';
             if (appUi) appUi.style.display = 'none';
         }
     });
@@ -527,43 +629,58 @@
         const email = document.getElementById('login-email').value.trim();
         const pass = document.getElementById('login-pass').value.trim();
         if(!email || !pass) { alert("Por favor, preencha o e-mail e a senha."); return; }
-        try { await signInWithEmailAndPassword(auth, email, pass); } 
+        try { await signInWithEmailAndPassword(auth, email, pass); }
         catch(e) { console.error(e); alert("Acesso negado: E-mail ou senha incorretos."); }
     };
 
     window.logoutNuvem = async function() {
-        try { await signOut(auth); window.orcamentoAtualId = null; } 
-        catch(e) { console.error(e); }
+        try {
+            await signOut(auth);
+            window.orcamentoAtualId = null;
+            window.orcamentoAtualNome = null;
+            window.atualizarBadgeOrcamentoNuvem();
+        } catch(e) { console.error(e); }
     };
 
-window.salvarOrcamentoNaNuven = async function() {
-        if (!window.currentUser) { alert("Precisa de iniciar sessão na secção 'Nuvem' antes de guardar."); return; }
+    window.salvarOrcamentoNaNuven = async function(forcarNovo = false) {
+        if (!window.currentUser) { alert("Você precisa iniciar sessão na seção 'Nuvem' antes de salvar."); return; }
         
-        // Embala todas as configurações num único objeto
         const configData = {
             estado: document.getElementById('select-estado').value,
             tabela: document.getElementById('select-tabela').value,
             bdi: document.getElementById('input-bdi').value,
+            bdiDif: document.getElementById('input-bdi-dif')?.value || '14.02',
             data_base: document.getElementById('select-data-base').value,
             nomeObra: document.getElementById('input-obra-nome')?.value || '',
             local: document.getElementById('input-obra-local')?.value || '',
             processo: document.getElementById('input-obra-processo')?.value || '',
-            revisao: document.getElementById('input-obra-revisao')?.value || 'R00'
+            revisao: document.getElementById('input-obra-revisao')?.value || 'R00',
+            orcamentista: document.getElementById('input-obra-orcamentista')?.value || '',
+            cargoOrcamentista: document.getElementById('input-obra-cargo')?.value || '',
+            registroOrcamentista: document.getElementById('input-obra-registro')?.value || '',
+            artObra: document.getElementById('input-obra-art')?.value || ''
         };
 
+        let dataInicio = window.appState.dataInicioObra || '';
+        if (!dataInicio && document.getElementById('input-data-inicio-obra')) {
+            dataInicio = document.getElementById('input-data-inicio-obra').value;
+        }
+
         try {
-            if (window.orcamentoAtualId) {
+            if (window.orcamentoAtualId && !forcarNovo) {
                 const docRef = doc(db, "orcamentos", window.orcamentoAtualId);
                 await updateDoc(docRef, {
                     configuracoes: configData,
                     itens: window.appState.orcamento,
+                    dataInicioObra: dataInicio,
+                    baseComposicoesPrazos: window.appState.baseComposicoesPrazos || {},
+                    composicaoBdi: window.appState.composicaoBdi || null,
                     atualizadoEm: serverTimestamp(),
                     atualizadoPor: window.currentUser.email
                 });
-                alert("✅ Orçamento atualizado com sucesso na nuvem!");
+                alert(`✅ Orçamento "${window.orcamentoAtualNome || window.orcamentoAtualId}" atualizado com sucesso na nuvem!`);
             } else {
-                // Se já houver um nome do projeto, sugere-o como nome do ficheiro na Nuvem
-                let sugestaoNome = configData.nomeObra ? `Orçamento - ${configData.nomeObra}` : "Novo Orçamento";
+                let sugestaoNome = configData.nomeObra ? `Orçamento - ${configData.nomeObra} (${configData.revisao})` : "Novo Orçamento";
                 const nomeOrcamento = prompt("Digite um nome para identificar este orçamento na nuvem:", sugestaoNome);
                 if (!nomeOrcamento) return;
                 
@@ -572,31 +689,45 @@ window.salvarOrcamentoNaNuven = async function() {
                     dataCriacao: new Date().toLocaleDateString('pt-BR'),
                     configuracoes: configData,
                     itens: window.appState.orcamento,
+                    dataInicioObra: dataInicio,
+                    baseComposicoesPrazos: window.appState.baseComposicoesPrazos || {},
+                    composicaoBdi: window.appState.composicaoBdi || null,
                     criadoEm: serverTimestamp(),
                     criadoPor: window.currentUser.email
                 });
                 window.orcamentoAtualId = docRef.id;
-                alert("✅ Orçamento guardado como novo na nuvem com sucesso!");
+                window.orcamentoAtualNome = nomeOrcamento;
+                window.atualizarBadgeOrcamentoNuvem();
+                window.salvarEstadoLocal();
+                alert(`✅ Orçamento "${nomeOrcamento}" salvo como novo na nuvem com sucesso!`);
             }
             window.carregarListaNuvem();
-        } catch (e) { console.error(e); alert("❌ Erro ao guardar orçamento na nuvem."); }
+        } catch (e) { console.error(e); alert("❌ Erro ao salvar orçamento na nuvem."); }
     };
 
     window.carregarListaNuvem = async function() {
         if (!window.currentUser) return;
         const container = document.getElementById('lista-orcamentos-nuvem');
         if (!container) return;
-        container.innerHTML = "A carregar orçamentos da nuvem...";
+        container.innerHTML = "Carregando orçamentos da nuvem...";
         try {
             const querySnapshot = await getDocs(collection(db, "orcamentos"));
-            let html = '<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;"><select id="select-orcamento-nuvem" style="flex: 1; min-width: 250px; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: #fff;"><option value="">📂 Selecione um orçamento guardado na nuvem...</option>';
+            let html = '<div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;"><select id="select-orcamento-nuvem" style="flex: 1; min-width: 240px; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); background-color: #fff;"><option value="">📂 Selecione um orçamento salvo na nuvem...</option>';
             querySnapshot.forEach((docSnap) => {
                 const dados = docSnap.data();
-                html += `<option value="${docSnap.id}">${dados.nome} (Criado em: ${dados.dataCriacao || 'Data não informada'})</option>`;
+                const sel = (window.orcamentoAtualId === docSnap.id) ? 'selected' : '';
+                html += `<option value="${docSnap.id}" ${sel}>${dados.nome} (Criado em: ${dados.dataCriacao || 'Data não informada'})</option>`;
             });
-            html += '</select><button class="btn btn-primary" onclick="window.carregarSelecionadoDaNuven()">📂 Abrir / Editar</button><button class="btn btn-primary" style="background-color: #6f42c1;" onclick="window.salvarOrcamentoNaNuven()">☁ Guardar na Nuvem</button><button class="btn btn-secondary" onclick="window.carregarListaNuvem()">🔄 Atualizar</button></div>';
-            container.innerHTML = querySnapshot.size > 0 ? html : '<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;"><span style="flex:1; color:var(--text-muted);">Nenhum orçamento guardado na nuvem ainda.</span><button class="btn btn-primary" style="background-color: #6f42c1;" onclick="window.salvarOrcamentoNaNuven()">☁ Guardar na Nuvem</button><button class="btn btn-secondary" onclick="window.carregarListaNuvem()">🔄 Atualizar</button></div>';
-        } catch (e) { console.error(e); container.innerHTML = "Erro ao ligar à base de dados da nuvem."; }
+            html += '</select>' +
+                '<button class="btn btn-primary" onclick="window.carregarSelecionadoDaNuven()">📂 Abrir</button>' +
+                '<button class="btn btn-primary" style="background-color: #6f42c1;" onclick="window.salvarOrcamentoNaNuven(false)" title="Atualiza o orçamento vinculado ou cria um novo">☁️ Salvar</button>' +
+                '<button class="btn btn-outline" onclick="window.salvarOrcamentoNaNuven(true)" title="Salva uma nova cópia/revisão na nuvem sem alterar o anterior">📑 Salvar como Cópia</button>' +
+                '<button class="btn btn-outline" style="color: var(--danger);" onclick="window.excluirSelecionadoDaNuvem()" title="Excluir o orçamento selecionado da nuvem">🗑️</button>' +
+                '<button class="btn btn-secondary" onclick="window.carregarListaNuvem()" title="Recarregar lista">🔄</button></div>';
+            container.innerHTML = querySnapshot.size > 0
+                ? html
+                : '<div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;"><span style="flex:1; color:var(--text-muted);">Nenhum orçamento salvo na nuvem ainda.</span><button class="btn btn-primary" style="background-color: #6f42c1;" onclick="window.salvarOrcamentoNaNuven(true)">☁️ Salvar na Nuvem</button><button class="btn btn-secondary" onclick="window.carregarListaNuvem()">🔄 Atualizar</button></div>';
+        } catch (e) { console.error(e); container.innerHTML = "Erro ao conectar ao banco de dados da nuvem."; }
     };
 
     window.carregarSelecionadoDaNuven = function() {
@@ -605,44 +736,103 @@ window.salvarOrcamentoNaNuven = async function() {
         window.carregarOrcamentoDaNuven(select.value);
     };
 
+    window.excluirSelecionadoDaNuvem = async function() {
+        if (!window.currentUser) return;
+        const select = document.getElementById('select-orcamento-nuvem');
+        if (!select || !select.value) { alert("Selecione na lista o orçamento que deseja excluir da nuvem."); return; }
+        const nomeTexto = select.options[select.selectedIndex].text;
+        if (!confirm(`⚠️ Tem certeza que deseja EXCLUIR permanentemente da nuvem o orçamento:\n"${nomeTexto}"?`)) return;
+        try {
+            const idExcluir = select.value;
+            await deleteDoc(doc(db, "orcamentos", idExcluir));
+            if (window.orcamentoAtualId === idExcluir) {
+                window.orcamentoAtualId = null;
+                window.orcamentoAtualNome = null;
+                window.atualizarBadgeOrcamentoNuvem();
+                window.salvarEstadoLocal();
+            }
+            alert("🗑️ Orçamento excluído da nuvem com sucesso.");
+            window.carregarListaNuvem();
+        } catch (e) {
+            console.error(e);
+            alert("❌ Erro ao excluir orçamento da nuvem.");
+        }
+    };
+
     window.carregarOrcamentoDaNuven = async function(id) {
         if (!window.currentUser) return;
-        if (!confirm("Deseja carregar este orçamento? Os itens atuais no ecrã serão substituídos.")) return;
+        if (window.appState.orcamento.length > 0 && !confirm("Deseja carregar este projeto da nuvem? Os itens atuais na tela serão substituídos.")) return;
         try {
             const docRef = doc(db, "orcamentos", id);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const dados = docSnap.data();
+                const estadoAnterior = document.getElementById('select-estado').value;
+                const dataBaseAnterior = document.getElementById('select-data-base').value;
+
                 window.orcamentoAtualId = id;
+                window.orcamentoAtualNome = dados.nome || id;
+                window.atualizarBadgeOrcamentoNuvem();
+                
+                // RESTAURA CONFIGURAÇÕES BÁSICAS
                 if (dados.configuracoes) {
                     if (dados.configuracoes.estado) document.getElementById('select-estado').value = dados.configuracoes.estado;
                     if (dados.configuracoes.tabela) document.getElementById('select-tabela').value = dados.configuracoes.tabela;
                     if (dados.configuracoes.bdi) document.getElementById('input-bdi').value = dados.configuracoes.bdi;
+                    if (dados.configuracoes.bdiDif !== undefined && document.getElementById('input-bdi-dif')) document.getElementById('input-bdi-dif').value = dados.configuracoes.bdiDif;
                     if (dados.configuracoes.data_base) document.getElementById('select-data-base').value = dados.configuracoes.data_base;
                     
-                    // PREENCHE OS NOVOS CAMPOS DA NUVEM NO ECRÃ:
                     if (dados.configuracoes.nomeObra !== undefined && document.getElementById('input-obra-nome')) document.getElementById('input-obra-nome').value = dados.configuracoes.nomeObra;
                     if (dados.configuracoes.local !== undefined && document.getElementById('input-obra-local')) document.getElementById('input-obra-local').value = dados.configuracoes.local;
                     if (dados.configuracoes.processo !== undefined && document.getElementById('input-obra-processo')) document.getElementById('input-obra-processo').value = dados.configuracoes.processo;
                     if (dados.configuracoes.revisao !== undefined && document.getElementById('input-obra-revisao')) document.getElementById('input-obra-revisao').value = dados.configuracoes.revisao;
+                    if (dados.configuracoes.orcamentista !== undefined && document.getElementById('input-obra-orcamentista')) document.getElementById('input-obra-orcamentista').value = dados.configuracoes.orcamentista;
+                    if (dados.configuracoes.cargoOrcamentista !== undefined && document.getElementById('input-obra-cargo')) document.getElementById('input-obra-cargo').value = dados.configuracoes.cargoOrcamentista;
+                    if (dados.configuracoes.registroOrcamentista !== undefined && document.getElementById('input-obra-registro')) document.getElementById('input-obra-registro').value = dados.configuracoes.registroOrcamentista;
+                    if (dados.configuracoes.artObra !== undefined && document.getElementById('input-obra-art')) document.getElementById('input-obra-art').value = dados.configuracoes.artObra;
                 }
+                
+                // RESTAURA ITENS DO ORÇAMENTO
                 if (dados.itens) {
                     window.appState.orcamento = dados.itens;
                     window.appState.nextId = Math.max(...dados.itens.map(i => i.id || 0), 0) + 1;
                 }
-                if (typeof window.atualizarOrcamentoEBusca === 'function') window.atualizarOrcamentoEBusca();
-                alert(`✅ Orçamento "${dados.nome}" carregado com sucesso!`);
+
+                // RESTAURA DATA INICIAL E MEMÓRIAS DA IA (GANTT)
+                window.appState.dataInicioObra = dados.dataInicioObra || '';
+                window.appState.baseComposicoesPrazos = dados.baseComposicoesPrazos || {};
+                if (dados.composicaoBdi) window.appState.composicaoBdi = dados.composicaoBdi;
+
+                const inputData = document.getElementById('input-data-inicio-obra');
+                if (inputData) inputData.value = window.appState.dataInicioObra || '';
+                
+                // Se mudou Estado ou Data-Base, recarrega os preços correspondentes
+                const novoEstado = document.getElementById('select-estado').value;
+                const novaDataBase = document.getElementById('select-data-base').value;
+                if (novoEstado !== estadoAnterior || novaDataBase !== dataBaseAnterior) {
+                    window.carregarBases();
+                } else if (typeof window.atualizarOrcamentoEBusca === 'function') {
+                    window.atualizarOrcamentoEBusca();
+                }
+                
+                setTimeout(() => {
+                    if (typeof window.carregarTabelaCronograma === 'function') window.carregarTabelaCronograma();
+                    if (typeof window.gerarGraficoGantt === 'function') window.gerarGraficoGantt();
+                }, 200);
+
+                alert(`✅ Projeto "${dados.nome}" carregado com sucesso!`);
             }
-        } catch (e) { console.error(e); alert("Erro ao descarregar o orçamento."); }
+        } catch (e) { console.error(e); alert("Erro ao baixar o orçamento da nuvem."); }
     };
+
     window.salvarBasePropriaNaNuven = async function() {
-        if (!window.currentUser) { alert("Precisa de iniciar sessão na secção 'Nuvem' antes de sincronizar a base própria."); return; }
+        if (!window.currentUser) { alert("Você precisa iniciar sessão na seção 'Nuvem' antes de sincronizar a Base Própria."); return; }
         if (!window.appState.databases.base_propria || window.appState.databases.base_propria.length === 0) { alert("A Base Própria está vazia."); return; }
         try {
             const docRef = doc(db, "configuracoes_globais", "base_propria_equipa");
             await setDoc(docRef, { itens: window.appState.databases.base_propria, atualizadoEm: serverTimestamp(), atualizadoPor: window.currentUser.email }, { merge: true });
-            alert("✅ Base Própria sincronizada com sucesso na nuvem para toda a equipa!");
-        } catch (e) { console.error(e); alert("❌ Erro ao guardar a Base Própria na nuvem."); }
+            alert("✅ Base Própria sincronizada com sucesso na nuvem para toda a equipe!");
+        } catch (e) { console.error(e); alert("❌ Erro ao salvar a Base Própria na nuvem."); }
     };
 
     window.carregarBasePropriaDaNuvem = async function() {
@@ -653,6 +843,7 @@ window.salvarOrcamentoNaNuven = async function() {
                 const dados = docSnap.data();
                 if (dados && Array.isArray(dados.itens)) {
                     window.appState.databases.base_propria = dados.itens;
+                    window.renderizarOrcamento();
                     console.log("Base Própria carregada da nuvem com sucesso!");
                 }
             }
@@ -660,48 +851,19 @@ window.salvarOrcamentoNaNuven = async function() {
     };
 </script>
 
-<!-- MOTOR DA MEMÓRIA DE CÁLCULO -->
-<script>
-    window.calcularMemoria = function() {
-        const inputMemoria = document.getElementById('input-add-memoria');
-        const inputQtd = document.getElementById('input-add-qtd');
-        let formula = inputMemoria.value.trim();
-        
-        if (!formula) return;
-
-        try {
-            // Substitui vírgulas por pontos (padrão brasileiro para contas)
-            formula = formula.replace(/,/g, '.');
-            
-            // Avalia a fórmula matemática com segurança local
-            let resultado = Function('"use strict";return (' + formula + ')')();
-            
-            if (!isNaN(resultado) && isFinite(resultado)) {
-                // Arredonda para 3 casas decimais e insere no campo de quantidade
-                inputQtd.value = parseFloat(resultado).toFixed(3);
-            }
-        } catch (e) {
-            console.warn("Fórmula matemática incompleta ou inválida na memória.");
-            // Deixa o usuário continuar a digitar sem emitir erros intrusivos
-        }
-    };
-</script>
 
 <!-- ========================================== -->
-<!-- MODAL DE COTAÇÕES (Adicionar no final do body do index.html) -->
+<!-- MODAL DE COTAÇÕES (TCU / LEI 14.133)       -->
 <!-- ========================================== -->
 <div id="modal-cotacoes" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
-    <!-- Adicionado max-height e overflow-y para rolar caso haja muitas linhas -->
     <div style="background: white; padding: 20px; border-radius: 8px; width: 95%; max-width: 600px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-height: 90vh; overflow-y: auto;">
-        <h3 style="margin-top: 0; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 10px;">📊 Mapa de Cotações (Metodologia TCU)</h3>
+        <h3 style="margin-top: 0; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 10px;">📊 Mapa de Cotações (Metodologia TCU / Lei 14.133)</h3>
         
-        <p style="font-size: 0.9rem; color: #475569; margin-bottom: 15px;">Insira a origem (Nome da Empresa, CNPJ ou Link) e o valor coletado. O sistema calculará a variância estatística para adoção da média ou mediana (limite de 25% CV).</p>
+        <p style="font-size: 0.9rem; color: #475569; margin-bottom: 15px;">Insira a origem (Nome da Empresa, CNPJ ou Link) e o valor coletado. O sistema calculará a dispersão estatística para adoção da média ou mediana (limite de 25% CV).</p>
         
-        <!-- Contêiner vazio onde as linhas serão inseridas dinamicamente -->
         <div id="container-linhas-cotacao" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
         </div>
 
-        <!-- Botão para adicionar mais cotações -->
         <button type="button" class="btn btn-secondary" onclick="adicionarLinhaCotacao()" style="margin-bottom: 15px; padding: 6px 10px; font-size: 0.85rem;">➕ Adicionar Cotação</button>
 
         <div id="resultado-estatistico" style="margin-top: 15px; padding: 10px; background: #f8fafc; border: 1px dashed #94a3b8; border-radius: 4px; font-size: 0.85rem; display: none;"></div>
@@ -709,6 +871,102 @@ window.salvarOrcamentoNaNuven = async function() {
         <div style="margin-top: 20px; display: flex; justify-content: space-between;">
             <button class="btn btn-outline" onclick="fecharModalCotacoes()">Cancelar</button>
             <button class="btn btn-primary" onclick="processarETransferirCotacoes()">Calcular & Aplicar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL DE COMPOSIÇÃO DO BDI (ACÓRDÃO 2622)  -->
+<!-- ========================================== -->
+<div id="modal-composicao-bdi" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: white; padding: 22px; border-radius: 8px; width: 96%; max-width: 760px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-height: 92vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #cbd5e1; padding-bottom: 10px; margin-bottom: 14px;">
+            <h3 style="margin: 0; color: #1e293b;">🧮 Composição Analítica do BDI (Acórdão 2622/2013 - TCU)</h3>
+            <button type="button" class="btn btn-sm btn-outline" onclick="sincronizarCprbNoModalBdi()" title="Ajusta a alíquota CPRB automaticamente conforme a tabela (0% Não Desonerada / 4,50% Desonerada)">🔄 Ajustar CPRB pela Tabela</button>
+        </div>
+        <p style="font-size: 0.84rem; color: #475569; margin-top: 0; margin-bottom: 14px;">
+            Fórmula Oficial TCU: <code>BDI = [((1 + AC + S + G + R) × (1 + DF) × (1 + L)) ÷ (1 - Tributos)] - 1</code>. Os valores abaixo serão exportados na aba <strong>Composição do BDI</strong> do Excel Oficial.
+        </p>
+
+        <div class="table-responsive">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.86rem;">
+                <thead>
+                    <tr style="background: #1e293b; color: white;">
+                        <th style="padding: 8px;">Parcela / Componente do BDI</th>
+                        <th style="padding: 8px; text-align: center; width: 165px;">Ref. TCU (Obras / Equip.)</th>
+                        <th style="padding: 8px; text-align: center; width: 140px;">BDI Padrão (%)</th>
+                        <th style="padding: 8px; text-align: center; width: 140px; background: #b45309;">⚡ BDI Diferenciado (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding: 6px 8px;"><strong>AC</strong> — Administração Central</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">3,00% a 5,50% | Eq: 1,50% a 4,49%</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-ac" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-ac" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 8px;"><strong>S + G</strong> — Seguro e Garantia</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">0,80% a 1,00% | Eq: 0,30% a 0,82%</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-sg" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-sg" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 8px;"><strong>R</strong> — Riscos e Imprevistos</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">0,97% a 1,27% | Eq: 0,56% a 0,89%</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-r" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-r" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 8px;"><strong>DF</strong> — Despesas Financeiras</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">0,59% a 1,39% | Eq: 0,85% a 1,11%</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-df" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-df" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 8px;"><strong>L</strong> — Lucro Bruto</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">6,16% a 8,96% | Eq: 3,50% a 6,22%</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-l" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-l" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                    <tr style="border-top: 2px solid #cbd5e1;">
+                        <td style="padding: 6px 8px;"><strong>PIS</strong> — Tributo Federal</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">0,65%</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-pis" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-pis" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 8px;"><strong>COFINS</strong> — Tributo Federal</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">3,00%</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-cofins" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-cofins" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 8px;"><strong>ISS</strong> — Imposto Municipal s/ Serviços</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">2,00% a 5,00% | Eq: 0,00%</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-iss" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-iss" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 6px 8px;"><strong>CPRB</strong> — Desoneração da Folha (Lei 12.546)</td>
+                        <td style="padding: 6px 8px; text-align: center; color: #64748b; font-size: 0.78rem;">0,00% (Oner.) ou 4,50% (Deson.)</td>
+                        <td style="padding: 6px 8px; text-align: center;"><input type="number" step="0.01" id="bdi-pad-cprb" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                        <td style="padding: 6px 8px; text-align: center; background: #fffbeb;"><input type="number" step="0.01" id="bdi-dif-cprb" style="width: 90px; text-align: right; padding: 4px;" oninput="recalcularPreviaModalBDI()"></td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr style="background: #f1f5f9; border-top: 2px solid #94a3b8; font-size: 1rem;">
+                        <td colspan="2" style="padding: 10px 8px; font-weight: 800; color: #0f172a;">BDI FINAL CALCULADO (FÓRMULA TCU):</td>
+                        <td style="padding: 10px 8px; text-align: center; font-weight: 800; color: var(--primary);" id="modal-bdi-pad-resultado">22,30%</td>
+                        <td style="padding: 10px 8px; text-align: center; font-weight: 800; color: #b45309; background: #fef3c7;" id="modal-bdi-dif-resultado">14,02%</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center;">
+            <button type="button" class="btn btn-outline" onclick="fecharModalComposicaoBDI()">Cancelar</button>
+            <button type="button" class="btn btn-primary" onclick="aplicarComposicaoBDI()">✅ Aplicar Taxas de BDI ao Orçamento</button>
         </div>
     </div>
 </div>
